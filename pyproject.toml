@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sv-toolchain-demo"
+version = "0.1.0-dev"
+description = "Verible, Verilator, and cocotb toolchain demo for SystemVerilog development."
+authors = [{name = "Joshua Rothe", email = "21348884+rothej@users.noreply.github.com"}]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.12"
+keywords = ["fpga", "systemverilog", "verilator", "cocotb", "verible", "rtl"]
+dependencies = [
+    "cocotb>=2.0.0",
+    "cocotb-tools",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit>=3.6.0",
+    "black>=23.12.0",
+    "isort>=5.13.0",
+    "mypy>=1.8.0",
+    "pytest>=7.4.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/rothej/fpga-cicd-toolchain-demo"
+Portfolio = "https://joshrothe.us"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["tb*"]
+
+[tool.black]
+line-length = 100
+target-version = ['py312']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+files = ["tb"]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+strict_equality = true
+check_untyped_defs = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers"
+testpaths = ["tb"]
+pythonpath = ["tb"]
+
+[[tool.mypy.overrides]]
+module = [
+    "cocotb",
+    "cocotb.*",
+    "cocotb_tools",
+    "cocotb_tools.*",
+]
+ignore_missing_imports = true

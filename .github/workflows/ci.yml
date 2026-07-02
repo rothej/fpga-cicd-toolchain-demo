@@ -1,0 +1,77 @@
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache Verible
+        id: cache-verible
+        uses: actions/cache@v4
+        with:
+          path: .tools/verible
+          key: verible-${{ runner.os }}-${{ hashFiles('scripts/setup_verible.sh') }}
+
+      - name: Install Verible
+        if: steps.cache-verible.outputs.cache-hit != 'true'
+        run: bash scripts/setup_verible.sh
+
+      - name: Add Verible to PATH
+        run: echo "$GITHUB_WORKSPACE/.tools/verible/bin" >> $GITHUB_PATH
+
+      - name: Install Python dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run pre-commit
+        run: pre-commit run --all-files
+
+  sim:
+    name: Simulate
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # libfl2 is a Verilator binary runtime dep — must run even on cache hit.
+      # Build-time deps (autoconf, bison, flex, etc.) are handled inside
+      # setup_verilator.sh and only run on cache miss.
+      - name: Install Verilator runtime dependencies
+        run: sudo apt-get install -y --no-install-recommends libfl2 zlib1g
+
+      - name: Cache Verilator
+        id: cache-verilator
+        uses: actions/cache@v4
+        with:
+          path: .tools/verilator
+          key: verilator-${{ runner.os }}-${{ hashFiles('scripts/setup_verilator.sh') }}
+
+      - name: Build Verilator
+        if: steps.cache-verilator.outputs.cache-hit != 'true'
+        run: bash scripts/setup_verilator.sh
+
+      - name: Add Verilator to PATH
+        run: echo "$GITHUB_WORKSPACE/.tools/verilator/bin" >> $GITHUB_PATH
+
+      - name: Install Python dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run simulation
+        run: make sim
