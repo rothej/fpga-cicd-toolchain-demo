@@ -1,0 +1,46 @@
+# .github/workflows/lint.yml
+name: Lint
+
+on:
+  workflow_call:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Cache Verible
+        id: cache-verible
+        uses: actions/cache@v4
+        with:
+          path: .tools/verible
+          key: verible-${{ runner.os }}-${{ hashFiles('scripts/setup_verible.sh') }}
+
+      - name: Install Verible
+        if: steps.cache-verible.outputs.cache-hit != 'true'
+        run: bash scripts/setup_verible.sh
+
+      - name: Add Verible to PATH
+        run: echo "$GITHUB_WORKSPACE/.tools/verible/bin" >> $GITHUB_PATH
+
+      - name: Install Python dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Cache pre-commit envs
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Run pre-commit
+        run: pre-commit run --all-files

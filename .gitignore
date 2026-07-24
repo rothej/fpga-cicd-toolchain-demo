@@ -23,6 +23,7 @@ build/
 
 # Testing
 .pytest_cache/
+.mypy_cache/
 .coverage
 htmlcov/
 coverage.xml
@@ -33,6 +34,7 @@ coverage.xml
 # Verilator / cocotb Simulation
 #############################################################################
 sim_build/
+sim/*/sim_build/
 results.xml
 *.vcd
 *.fst
@@ -43,6 +45,7 @@ __pycache__/
 # Verible / Linting
 #############################################################################
 .tools/
+.ruff_cache/
 
 #############################################################################
 # Editors / IDEs
@@ -95,3 +98,4 @@ Misc
 #############################################################################
 copy_files.sh
 combined_files.txt
+logs/

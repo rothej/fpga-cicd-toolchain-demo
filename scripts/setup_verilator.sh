@@ -1,6 +1,6 @@
 #!/bin/bash
 # scripts/setup_verilator.sh
-# NOTE: Verilator does not ship prebuilt binaries — built from source.
+# NOTE: Verilator does not ship prebuilt binaries - built from source.
 # cocotb 2.0 requires Verilator >= 5.036. Pinning to 5.040.
 set -euo pipefail
 

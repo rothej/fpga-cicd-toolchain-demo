@@ -1,0 +1,71 @@
+# .github/workflows/integration_sim.yml
+name: Integration Sim
+
+on:
+  workflow_call:
+
+jobs:
+  setup-verilator:
+    name: Build Verilator
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Verilator runtime dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfl2 zlib1g
+
+      - name: Cache Verilator
+        id: cache-verilator
+        uses: actions/cache@v4
+        with:
+          path: .tools/verilator
+          key: verilator-${{ runner.os }}-${{ hashFiles('scripts/setup_verilator.sh') }}
+
+      - name: Build Verilator
+        if: steps.cache-verilator.outputs.cache-hit != 'true'
+        run: bash scripts/setup_verilator.sh
+
+  integration-sim:
+    name: nr_chain Loopback
+    runs-on: ubuntu-24.04
+    needs: setup-verilator
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Verilator runtime dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfl2 zlib1g
+
+      - name: Restore Verilator cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .tools/verilator
+          key: verilator-${{ runner.os }}-${{ hashFiles('scripts/setup_verilator.sh') }}
+          fail-on-cache-miss: true  # setup-verilator job guarantees it exists
+
+      - name: Add Verilator to PATH
+        run: echo "$GITHUB_WORKSPACE/.tools/verilator/bin" >> $GITHUB_PATH
+
+      - name: Install Python dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run integration simulation
+        run: make integration-sim
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-nr_chain
+          path: sim/nr_chain/sim_build/coverage.dat
