@@ -6,7 +6,6 @@ import random
 
 from pyuvm import uvm_sequence
 
-from verif.common.config_utils import _cfg
 from verif.scrambler.seq_item import ScramblerSeqItem
 
 # Representative 31-bit cinit values.
@@ -21,25 +20,25 @@ _TEST_CINIT_VALUES: list[int] = [
 
 
 class RandomDataSeq(uvm_sequence):
-    """
-    *count* packets of random data, fixed cinit from ConfigDB.
+    """count packets of random data, fixed cinit."""
 
-    ConfigDB keys: cinit, data_w, min_len, max_len, count
-    """
+    def __init__(self, name: str = "RandomDataSeq") -> None:
+        super().__init__(name)
+        self.cinit: int = 0x12345678 & 0x7FFFFFFF
+        self.data_w: int = 8
+        self.min_len: int = 8
+        self.max_len: int = 256
+        self.count: int = 32
 
     async def body(self) -> None:
-        cinit = _cfg(self, "cinit", 0x12345678 & 0x7FFFFFFF)
-        data_w = _cfg(self, "data_w", 8)
-        min_len = _cfg(self, "min_len", 8)
-        max_len = _cfg(self, "max_len", 256)
-        count = _cfg(self, "count", 32)
-        mask = (1 << data_w) - 1
-
-        for _ in range(count):
+        mask = (1 << self.data_w) - 1
+        for _ in range(self.count):
             item = ScramblerSeqItem()
-            item.cinit = cinit
-            item.data_w = data_w
-            item.data = [random.randint(0, mask) for _ in range(random.randint(min_len, max_len))]
+            item.cinit = self.cinit
+            item.data_w = self.data_w
+            item.data = [
+                random.randint(0, mask) for _ in range(random.randint(self.min_len, self.max_len))
+            ]
             await self.start_item(item)
             await self.finish_item(item)
 
@@ -50,45 +49,48 @@ class AllZerosSeq(uvm_sequence):
 
     Because scramble(0, cinit) == Gold-sequence, the DUT output must
     exactly equal the Gold sequence - a direct check of the LFSR logic.
-
-    ConfigDB keys: cinit, data_w, length, count
     """
 
-    async def body(self) -> None:
-        cinit = _cfg(self, "cinit", 0x12345678 & 0x7FFFFFFF)
-        data_w = _cfg(self, "data_w", 8)
-        length = _cfg(self, "length", 256)
-        count = _cfg(self, "count", 4)
+    def __init__(self, name: str = "AllZerosSeq") -> None:
+        super().__init__(name)
+        self.cinit: int = 0x12345678 & 0x7FFFFFFF
+        self.data_w: int = 8
+        self.length: int = 256
+        self.count: int = 4
 
-        for _ in range(count):
+    async def body(self) -> None:
+        for _ in range(self.count):
             item = ScramblerSeqItem()
-            item.cinit = cinit
-            item.data_w = data_w
-            item.data = [0] * length
+            item.cinit = self.cinit
+            item.data_w = self.data_w
+            item.data = [0] * self.length
             await self.start_item(item)
             await self.finish_item(item)
 
 
 class MultiCinitSeq(uvm_sequence):
     """
-    One packet per entry in _TEST_CINIT_VALUES.
+    One packet per entry in cinit_values.
 
     Verifies that the DUT correctly re-initialises the Gold sequence for
     each new cinit - covers different cell-ID / RNTI combinations.
-
-    ConfigDB keys: data_w, min_len, max_len
     """
 
-    async def body(self) -> None:
-        data_w = _cfg(self, "data_w", 8)
-        min_len = _cfg(self, "min_len", 16)
-        max_len = _cfg(self, "max_len", 128)
-        mask = (1 << data_w) - 1
+    def __init__(self, name: str = "MultiCinitSeq") -> None:
+        super().__init__(name)
+        self.cinit_values: list[int] = list(_TEST_CINIT_VALUES)
+        self.data_w: int = 8
+        self.min_len: int = 16
+        self.max_len: int = 128
 
-        for cinit in _TEST_CINIT_VALUES:
+    async def body(self) -> None:
+        mask = (1 << self.data_w) - 1
+        for cinit in self.cinit_values:
             item = ScramblerSeqItem()
             item.cinit = cinit
-            item.data_w = data_w
-            item.data = [random.randint(0, mask) for _ in range(random.randint(min_len, max_len))]
+            item.data_w = self.data_w
+            item.data = [
+                random.randint(0, mask) for _ in range(random.randint(self.min_len, self.max_len))
+            ]
             await self.start_item(item)
             await self.finish_item(item)

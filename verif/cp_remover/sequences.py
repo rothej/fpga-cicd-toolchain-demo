@@ -6,53 +6,52 @@ import random
 
 from pyuvm import uvm_sequence
 
-from verif.common.config_utils import _cfg
 from verif.cp_remover.seq_item import CpRemoverSeqItem
 
 
 class RandomSingleSymbolSeq(uvm_sequence):
     """
-    One packet of (cp_len + N_FFT) random samples at a fixed cp_len.
-
-    ConfigDB keys: n_fft, cp_len, samp_w
+    One packet of (cp_len + n_fft) random samples at a fixed cp_len.
     """
 
-    async def body(self) -> None:
-        n_fft = _cfg(self, "n_fft", 64)
-        cp_len = _cfg(self, "cp_len", 9)
-        samp_w = _cfg(self, "samp_w", 16)
-        mask = (1 << samp_w) - 1
+    def __init__(self, name: str = "RandomSingleSymbolSeq") -> None:
+        super().__init__(name)
+        self.n_fft: int = 64
+        self.cp_len: int = 9
+        self.samp_w: int = 16
 
+    async def body(self) -> None:
+        mask = (1 << self.samp_w) - 1
         item = CpRemoverSeqItem()
-        item.full_samples = [random.randint(0, mask) for _ in range(cp_len + n_fft)]
-        item.cp_len = cp_len
-        item.samp_w = samp_w
+        item.full_samples = [random.randint(0, mask) for _ in range(self.cp_len + self.n_fft)]
+        item.cp_len = self.cp_len
+        item.samp_w = self.samp_w
         await self.start_item(item)
         await self.finish_item(item)
 
 
 class MultiSymbolSeq(uvm_sequence):
     """
-    count back-to-back packets, each (cp_len + N_FFT) random samples.
+    count back-to-back packets, each (cp_len + n_fft) random samples.
 
     Primary regression for inter-symbol contamination: no sample from the
     payload of packet N may appear in the output of packet N+1.
-
-    ConfigDB keys: n_fft, cp_len, samp_w, count
     """
 
-    async def body(self) -> None:
-        n_fft = _cfg(self, "n_fft", 64)
-        cp_len = _cfg(self, "cp_len", 9)
-        samp_w = _cfg(self, "samp_w", 16)
-        count = _cfg(self, "count", 16)
-        mask = (1 << samp_w) - 1
+    def __init__(self, name: str = "MultiSymbolSeq") -> None:
+        super().__init__(name)
+        self.n_fft: int = 64
+        self.cp_len: int = 9
+        self.samp_w: int = 16
+        self.count: int = 16
 
-        for _ in range(count):
+    async def body(self) -> None:
+        mask = (1 << self.samp_w) - 1
+        for _ in range(self.count):
             item = CpRemoverSeqItem()
-            item.full_samples = [random.randint(0, mask) for _ in range(cp_len + n_fft)]
-            item.cp_len = cp_len
-            item.samp_w = samp_w
+            item.full_samples = [random.randint(0, mask) for _ in range(self.cp_len + self.n_fft)]
+            item.cp_len = self.cp_len
+            item.samp_w = self.samp_w
             await self.start_item(item)
             await self.finish_item(item)
 
@@ -62,50 +61,50 @@ class CountingPatternSeq(uvm_sequence):
     One packet where full_samples[i] = i & mask.
 
     CP region  -> [0, 1, .., cp_len-1]                   (discarded)
-    Payload    -> [cp_len, cp_len+1, .., cp_len+N_FFT-1] (expected output)
+    Payload    -> [cp_len, cp_len+1, .., cp_len+n_fft-1] (expected output)
 
     The discard boundary is trivially verifiable on a waveform viewer:
     the first output beat must equal cp_len, not 0.
-
-    ConfigDB keys: n_fft, cp_len, samp_w
     """
 
-    async def body(self) -> None:
-        n_fft = _cfg(self, "n_fft", 64)
-        cp_len = _cfg(self, "cp_len", 9)
-        samp_w = _cfg(self, "samp_w", 16)
-        mask = (1 << samp_w) - 1
+    def __init__(self, name: str = "CountingPatternSeq") -> None:
+        super().__init__(name)
+        self.n_fft: int = 64
+        self.cp_len: int = 9
+        self.samp_w: int = 16
 
+    async def body(self) -> None:
+        mask = (1 << self.samp_w) - 1
         item = CpRemoverSeqItem()
-        item.full_samples = [i & mask for i in range(cp_len + n_fft)]
-        item.cp_len = cp_len
-        item.samp_w = samp_w
+        item.full_samples = [i & mask for i in range(self.cp_len + self.n_fft)]
+        item.cp_len = self.cp_len
+        item.samp_w = self.samp_w
         await self.start_item(item)
         await self.finish_item(item)
 
 
 class VaryingCpLenSeq(uvm_sequence):
     """
-    One packet per cp_len value in the cp_lens list, driven back-to-back.
+    One packet per cp_len value in cp_lens, driven back-to-back.
 
-    Models the 5G NR slot structure: symbol 0 arrives with the extended CP,
-    symbols 1-13 arrive with the normal CP. Exercises runtime cp_len
-    reconfiguration between consecutive received packets.
-
-    ConfigDB keys: n_fft, samp_w, cp_lens (list[int])
+    Models the 5G NR slot structure on the receiver side: symbol 0 arrives
+    with the extended CP, symbols 1-13 with the normal CP. Exercises runtime
+    cp_len reconfiguration between consecutive received packets.
     """
 
-    async def body(self) -> None:
-        n_fft = _cfg(self, "n_fft", 64)
-        samp_w = _cfg(self, "samp_w", 16)
-        cp_lens = _cfg(self, "cp_lens", [0, 4, 8, 16])
-        mask = (1 << samp_w) - 1
+    def __init__(self, name: str = "VaryingCpLenSeq") -> None:
+        super().__init__(name)
+        self.n_fft: int = 64
+        self.samp_w: int = 16
+        self.cp_lens: list[int] = [0, 4, 8, 16]
 
-        for cp_len in cp_lens:
+    async def body(self) -> None:
+        mask = (1 << self.samp_w) - 1
+        for cp_len in self.cp_lens:
             item = CpRemoverSeqItem()
-            item.full_samples = [random.randint(0, mask) for _ in range(cp_len + n_fft)]
+            item.full_samples = [random.randint(0, mask) for _ in range(cp_len + self.n_fft)]
             item.cp_len = cp_len
-            item.samp_w = samp_w
+            item.samp_w = self.samp_w
             await self.start_item(item)
             await self.finish_item(item)
 
@@ -115,45 +114,45 @@ class ZeroCpSeq(uvm_sequence):
     count packets with cp_len=0 - pure passthrough.
 
     Output must equal input verbatim; DUT must assert output tlast at beat
-    N_FFT-1 without suppressing any input samples.
-
-    ConfigDB keys: n_fft, samp_w, count
+    n_fft-1 without suppressing any input samples.
     """
 
-    async def body(self) -> None:
-        n_fft = _cfg(self, "n_fft", 64)
-        samp_w = _cfg(self, "samp_w", 16)
-        count = _cfg(self, "count", 8)
-        mask = (1 << samp_w) - 1
+    def __init__(self, name: str = "ZeroCpSeq") -> None:
+        super().__init__(name)
+        self.n_fft: int = 64
+        self.samp_w: int = 16
+        self.count: int = 8
 
-        for _ in range(count):
+    async def body(self) -> None:
+        mask = (1 << self.samp_w) - 1
+        for _ in range(self.count):
             item = CpRemoverSeqItem()
-            item.full_samples = [random.randint(0, mask) for _ in range(n_fft)]
+            item.full_samples = [random.randint(0, mask) for _ in range(self.n_fft)]
             item.cp_len = 0
-            item.samp_w = samp_w
+            item.samp_w = self.samp_w
             await self.start_item(item)
             await self.finish_item(item)
 
 
 class MaxCpLenSeq(uvm_sequence):
     """
-    Single packet with cp_len=CP_LEN_MAX.
+    Single packet with cp_len at its maximum value.
 
-    Stresses the discard counter at its maximum depth: the DUT must suppress
-    exactly CP_LEN_MAX leading beats before emitting the first output sample.
-
-    ConfigDB keys: n_fft, cp_len, samp_w
+    Stresses the discard counter at full depth: the DUT must suppress exactly
+    cp_len leading beats before emitting the first output sample.
     """
 
-    async def body(self) -> None:
-        n_fft = _cfg(self, "n_fft", 64)
-        cp_len = _cfg(self, "cp_len", 16)
-        samp_w = _cfg(self, "samp_w", 16)
-        mask = (1 << samp_w) - 1
+    def __init__(self, name: str = "MaxCpLenSeq") -> None:
+        super().__init__(name)
+        self.n_fft: int = 64
+        self.cp_len: int = 16
+        self.samp_w: int = 16
 
+    async def body(self) -> None:
+        mask = (1 << self.samp_w) - 1
         item = CpRemoverSeqItem()
-        item.full_samples = [random.randint(0, mask) for _ in range(cp_len + n_fft)]
-        item.cp_len = cp_len
-        item.samp_w = samp_w
+        item.full_samples = [random.randint(0, mask) for _ in range(self.cp_len + self.n_fft)]
+        item.cp_len = self.cp_len
+        item.samp_w = self.samp_w
         await self.start_item(item)
         await self.finish_item(item)

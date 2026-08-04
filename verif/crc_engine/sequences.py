@@ -13,7 +13,6 @@ import random
 from pyuvm import uvm_sequence
 
 from verif.common.axis_agent import AxisTransaction
-from verif.common.config_utils import _cfg
 
 __all__ = [
     "CrcKnownVectorSeq",
@@ -44,23 +43,28 @@ class CrcKnownVectorSeq(uvm_sequence):
 
 class CrcRandomSeq(uvm_sequence):
     """
-    Send *rand_count* random payloads of length in [rand_min_len, rand_max_len].
+    Send count random payloads of length in [min_len, max_len].
 
-    ConfigDB keys: rand_count, rand_min_len, rand_max_len, rand_seed
+    Set seed to an integer for reproducible runs; None uses the current
+    system time (non-deterministic but still functionally correct).
     """
 
+    def __init__(self, name: str = "CrcRandomSeq") -> None:
+        super().__init__(name)
+        self.count: int = 64
+        self.min_len: int = 1
+        self.max_len: int = 128
+        self.seed: int | None = None
+
     async def body(self) -> None:
-        count = int(_cfg(self, "rand_count", 64))
-        min_len = int(_cfg(self, "rand_min_len", 1))
-        max_len = int(_cfg(self, "rand_max_len", 128))
+        if self.seed is not None:
+            random.seed(self.seed)
 
-        seed = _cfg(self, "rand_seed", None)
-        if seed is not None:
-            random.seed(int(seed))
-
-        for _ in range(count):
+        for _ in range(self.count):
             txn = AxisTransaction()
-            txn.data = [random.randint(0, 255) for _ in range(random.randint(min_len, max_len))]
+            txn.data = [
+                random.randint(0, 255) for _ in range(random.randint(self.min_len, self.max_len))
+            ]
             txn.last = True
             await self.start_item(txn)
             await self.finish_item(txn)

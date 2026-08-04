@@ -6,7 +6,6 @@ import random
 
 from pyuvm import uvm_sequence
 
-from verif.common.config_utils import _cfg
 from verif.common.nr_ref_model import qam_map
 from verif.qam_demapper.seq_item import QamDemapperSeqItem
 
@@ -15,31 +14,31 @@ _ALL_MOD_ORDERS: list[int] = [2, 4, 6, 8]
 
 class RoundtripSeq(uvm_sequence):
     """
-    N packets of random bit words at a fixed mod_order.
+    count packets of random bit words at a fixed mod_order.
 
-    Each word is mapped through the qam_map reference to produce a valid
-    (I, Q) pair, which is stored in the seq_item and driven by the driver.
+    Each word is mapped through qam_map to produce a valid (I, Q) pair.
     The scoreboard recovers the expected output via qam_demap - a full
     reference-model roundtrip independent of the DUT.
-
-    ConfigDB keys: mod_order, iq_w, min_len, max_len, count
     """
 
+    def __init__(self, name: str = "RoundtripSeq") -> None:
+        super().__init__(name)
+        self.mod_order: int = 2
+        self.iq_w: int = 8
+        self.min_len: int = 8
+        self.max_len: int = 256
+        self.count: int = 32
+
     async def body(self) -> None:
-        mod_order = _cfg(self, "mod_order", 2)
-        iq_w = _cfg(self, "iq_w", 8)
-        min_len = _cfg(self, "min_len", 8)
-        max_len = _cfg(self, "max_len", 256)
-        count = _cfg(self, "count", 32)
-        mask = (1 << mod_order) - 1
-
-        for _ in range(count):
-            words = [random.randint(0, mask) for _ in range(random.randint(min_len, max_len))]
-            symbols = qam_map(words, mod_order)
-
+        mask = (1 << self.mod_order) - 1
+        for _ in range(self.count):
+            words = [
+                random.randint(0, mask) for _ in range(random.randint(self.min_len, self.max_len))
+            ]
+            symbols = qam_map(words, self.mod_order)
             item = QamDemapperSeqItem()
-            item.mod_order = mod_order
-            item.iq_w = iq_w
+            item.mod_order = self.mod_order
+            item.iq_w = self.iq_w
             item.symbols = symbols
             await self.start_item(item)
             await self.finish_item(item)
@@ -51,24 +50,25 @@ class AllModOrdersRoundtripSeq(uvm_sequence):
     sent back-to-back.
 
     Verifies that the DUT correctly reconfigures when mod_order changes
-    between packets - symmetric counterpart to AllModOrdersSeq in the mapper TB.
-
-    ConfigDB keys: iq_w, min_len, max_len
+    between packets.
     """
 
-    async def body(self) -> None:
-        iq_w = _cfg(self, "iq_w", 8)
-        min_len = _cfg(self, "min_len", 16)
-        max_len = _cfg(self, "max_len", 128)
+    def __init__(self, name: str = "AllModOrdersRoundtripSeq") -> None:
+        super().__init__(name)
+        self.iq_w: int = 8
+        self.min_len: int = 16
+        self.max_len: int = 128
 
+    async def body(self) -> None:
         for mo in _ALL_MOD_ORDERS:
             mask = (1 << mo) - 1
-            words = [random.randint(0, mask) for _ in range(random.randint(min_len, max_len))]
+            words = [
+                random.randint(0, mask) for _ in range(random.randint(self.min_len, self.max_len))
+            ]
             symbols = qam_map(words, mo)
-
             item = QamDemapperSeqItem()
             item.mod_order = mo
-            item.iq_w = iq_w
+            item.iq_w = self.iq_w
             item.symbols = symbols
             await self.start_item(item)
             await self.finish_item(item)
@@ -78,24 +78,21 @@ class AllConstellationPointsSeq(uvm_sequence):
     """
     All 2^mod_order valid (I, Q) constellation points in one shuffled packet.
 
-    Enumerates every input bit word, maps through qam_map reference to
-    produce the corresponding (I, Q) pair, then drives all of them.
     Guarantees full constellation input coverage in a single packet.
-
-    ConfigDB keys: mod_order, iq_w
     """
 
+    def __init__(self, name: str = "AllConstellationPointsSeq") -> None:
+        super().__init__(name)
+        self.mod_order: int = 4
+        self.iq_w: int = 8
+
     async def body(self) -> None:
-        mod_order = _cfg(self, "mod_order", 4)
-        iq_w = _cfg(self, "iq_w", 8)
-
-        all_words = list(range(1 << mod_order))
+        all_words = list(range(1 << self.mod_order))
         random.shuffle(all_words)
-        symbols = qam_map(all_words, mod_order)
-
+        symbols = qam_map(all_words, self.mod_order)
         item = QamDemapperSeqItem()
-        item.mod_order = mod_order
-        item.iq_w = iq_w
+        item.mod_order = self.mod_order
+        item.iq_w = self.iq_w
         item.symbols = symbols
         await self.start_item(item)
         await self.finish_item(item)

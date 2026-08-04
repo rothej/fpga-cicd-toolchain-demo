@@ -14,6 +14,9 @@ from verif.qam_mapper.sequences import (
     RandomDataSeq,
 )
 
+_DATA_W: int = 8
+_IQ_W: int = 8
+
 
 class QamMapperBaseTest(BaseTest):
     """
@@ -27,12 +30,8 @@ class QamMapperBaseTest(BaseTest):
         ConfigDB().set(None, "*", "dut", cocotb.top)
         super().build_phase()
         ConfigDB().set(self, "*", "drain_cycles", 32)
-        ConfigDB().set(self, "*", "data_w", 8)
-        ConfigDB().set(self, "*", "iq_w", 8)
-        ConfigDB().set(self, "*", "mod_order", 2)  # QPSK default
-        ConfigDB().set(self, "*", "min_len", 8)
-        ConfigDB().set(self, "*", "max_len", 256)
-        ConfigDB().set(self, "*", "count", 32)
+        # iq_w consumed by QamMapperOutputMonitor (a component).
+        ConfigDB().set(self, "*", "iq_w", _IQ_W)
         self.env = QamMapperEnv.create("env", self)
 
     async def pre_body(self) -> None:
@@ -51,8 +50,13 @@ class QpskTest(QamMapperBaseTest):
     """32 random QPSK packets. Baseline: all four +/-90 constellation points."""
 
     async def body(self) -> None:
-        ConfigDB().set(self, "*", "mod_order", 2)
-        await RandomDataSeq("qpsk_seq").start(self.env.tx_agent.sequencer)
+        seq = RandomDataSeq("qpsk_seq")
+        seq.mod_order = 2
+        seq.data_w = _DATA_W
+        seq.min_len = 8
+        seq.max_len = 256
+        seq.count = 32
+        await seq.start(self.env.tx_agent.sequencer)
 
 
 @pyuvm.test()
@@ -60,8 +64,13 @@ class SixteenQamTest(QamMapperBaseTest):
     """32 random 16-QAM packets. Exercises +/-24, +/-72 levels."""
 
     async def body(self) -> None:
-        ConfigDB().set(self, "*", "mod_order", 4)
-        await RandomDataSeq("16qam_seq").start(self.env.tx_agent.sequencer)
+        seq = RandomDataSeq("16qam_seq")
+        seq.mod_order = 4
+        seq.data_w = _DATA_W
+        seq.min_len = 8
+        seq.max_len = 256
+        seq.count = 32
+        await seq.start(self.env.tx_agent.sequencer)
 
 
 @pyuvm.test()
@@ -69,8 +78,13 @@ class SixtyFourQamTest(QamMapperBaseTest):
     """32 random 64-QAM packets. Exercises +/-12, +/-36, +/-60, +/-84 levels."""
 
     async def body(self) -> None:
-        ConfigDB().set(self, "*", "mod_order", 6)
-        await RandomDataSeq("64qam_seq").start(self.env.tx_agent.sequencer)
+        seq = RandomDataSeq("64qam_seq")
+        seq.mod_order = 6
+        seq.data_w = _DATA_W
+        seq.min_len = 8
+        seq.max_len = 256
+        seq.count = 32
+        await seq.start(self.env.tx_agent.sequencer)
 
 
 @pyuvm.test()
@@ -78,8 +92,13 @@ class TwoFiftySixQamTest(QamMapperBaseTest):
     """32 random 256-QAM packets. Full 8-bit input range exercised."""
 
     async def body(self) -> None:
-        ConfigDB().set(self, "*", "mod_order", 8)
-        await RandomDataSeq("256qam_seq").start(self.env.tx_agent.sequencer)
+        seq = RandomDataSeq("256qam_seq")
+        seq.mod_order = 8
+        seq.data_w = _DATA_W
+        seq.min_len = 8
+        seq.max_len = 256
+        seq.count = 32
+        await seq.start(self.env.tx_agent.sequencer)
 
 
 @pyuvm.test()
@@ -90,7 +109,11 @@ class AllModOrdersTest(QamMapperBaseTest):
     """
 
     async def body(self) -> None:
-        await AllModOrdersSeq("all_mo_seq").start(self.env.tx_agent.sequencer)
+        seq = AllModOrdersSeq("all_mo_seq")
+        seq.data_w = _DATA_W
+        seq.min_len = 16
+        seq.max_len = 128
+        await seq.start(self.env.tx_agent.sequencer)
 
 
 @pyuvm.test()
@@ -101,8 +124,10 @@ class AllQpskConstellationPointsTest(QamMapperBaseTest):
     """
 
     async def body(self) -> None:
-        ConfigDB().set(self, "*", "mod_order", 2)
-        await AllConstellationPointsSeq("qpsk_pts_seq").start(self.env.tx_agent.sequencer)
+        seq = AllConstellationPointsSeq("qpsk_pts_seq")
+        seq.mod_order = 2
+        seq.data_w = _DATA_W
+        await seq.start(self.env.tx_agent.sequencer)
 
 
 @pyuvm.test()
@@ -113,5 +138,7 @@ class AllSixteenQamConstellationPointsTest(QamMapperBaseTest):
     """
 
     async def body(self) -> None:
-        ConfigDB().set(self, "*", "mod_order", 4)
-        await AllConstellationPointsSeq("16qam_pts_seq").start(self.env.tx_agent.sequencer)
+        seq = AllConstellationPointsSeq("16qam_pts_seq")
+        seq.mod_order = 4
+        seq.data_w = _DATA_W
+        await seq.start(self.env.tx_agent.sequencer)

@@ -16,6 +16,10 @@ from verif.cp_inserter.sequences import (
     ZeroCpSeq,
 )
 
+_N_FFT: int = 64
+_CP_LEN_MAX: int = 16
+_SAMP_W: int = 16
+
 
 class CpInserterBaseTest(BaseTest):
     """
@@ -34,10 +38,8 @@ class CpInserterBaseTest(BaseTest):
         ConfigDB().set(None, "*", "dut", cocotb.top)
         super().build_phase()
         ConfigDB().set(self, "*", "drain_cycles", 128)
-        ConfigDB().set(self, "*", "n_fft", 64)
-        ConfigDB().set(self, "*", "cp_len", 9)
-        ConfigDB().set(self, "*", "samp_w", 16)
-        ConfigDB().set(self, "*", "count", 16)
+        # samp_w consumed by CpInserterDriver and CpInserterOutputMonitor.
+        ConfigDB().set(self, "*", "samp_w", _SAMP_W)
         self.env = CpInserterEnv.create("env", self)
 
     async def pre_body(self) -> None:
@@ -59,7 +61,12 @@ class DefaultCpTest(CpInserterBaseTest):
     """
 
     async def body(self) -> None:
-        await MultiSymbolSeq("default_cp_seq").start(self.env.tx_agent.sequencer)
+        seq = MultiSymbolSeq("default_cp_seq")
+        seq.n_fft = _N_FFT
+        seq.cp_len = 9
+        seq.samp_w = _SAMP_W
+        seq.count = 16
+        await seq.start(self.env.tx_agent.sequencer)
 
 
 @pyuvm.test()
@@ -70,7 +77,11 @@ class ZeroCpTest(CpInserterBaseTest):
     """
 
     async def body(self) -> None:
-        await ZeroCpSeq("zero_cp_seq").start(self.env.tx_agent.sequencer)
+        seq = ZeroCpSeq("zero_cp_seq")
+        seq.n_fft = _N_FFT
+        seq.samp_w = _SAMP_W
+        seq.count = 8
+        await seq.start(self.env.tx_agent.sequencer)
 
 
 @pyuvm.test()
@@ -81,7 +92,11 @@ class CountingPatternTest(CpInserterBaseTest):
     """
 
     async def body(self) -> None:
-        await CountingPatternSeq("counting_seq").start(self.env.tx_agent.sequencer)
+        seq = CountingPatternSeq("counting_seq")
+        seq.n_fft = _N_FFT
+        seq.cp_len = 9
+        seq.samp_w = _SAMP_W
+        await seq.start(self.env.tx_agent.sequencer)
 
 
 @pyuvm.test()
@@ -93,8 +108,11 @@ class VaryingCpLenTest(CpInserterBaseTest):
     """
 
     async def body(self) -> None:
-        ConfigDB().set(self, "*", "cp_lens", [0, 4, 8, 12, 16])
-        await VaryingCpLenSeq("varying_cp_seq").start(self.env.tx_agent.sequencer)
+        seq = VaryingCpLenSeq("varying_cp_seq")
+        seq.n_fft = _N_FFT
+        seq.samp_w = _SAMP_W
+        seq.cp_lens = [0, 4, 8, 12, 16]
+        await seq.start(self.env.tx_agent.sequencer)
 
 
 @pyuvm.test()
@@ -106,8 +124,12 @@ class MultiSymbolBackToBackTest(CpInserterBaseTest):
     """
 
     async def body(self) -> None:
-        ConfigDB().set(self, "*", "count", 32)
-        await MultiSymbolSeq("multi_bt_seq").start(self.env.tx_agent.sequencer)
+        seq = MultiSymbolSeq("multi_bt_seq")
+        seq.n_fft = _N_FFT
+        seq.cp_len = 9
+        seq.samp_w = _SAMP_W
+        seq.count = 32
+        await seq.start(self.env.tx_agent.sequencer)
 
 
 @pyuvm.test()
@@ -118,5 +140,8 @@ class MaxCpLenTest(CpInserterBaseTest):
     """
 
     async def body(self) -> None:
-        ConfigDB().set(self, "*", "cp_len", 16)
-        await RandomSingleSymbolSeq("max_cp_seq").start(self.env.tx_agent.sequencer)
+        seq = RandomSingleSymbolSeq("max_cp_seq")
+        seq.n_fft = _N_FFT
+        seq.cp_len = _CP_LEN_MAX
+        seq.samp_w = _SAMP_W
+        await seq.start(self.env.tx_agent.sequencer)

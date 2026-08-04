@@ -22,6 +22,15 @@
  * The scrambler module is self-inverse under XOR; initialised with the same
  * cinit as the TX path it descrambles the recovered bits.
  *
+ * Output masking:
+ *   qam_demapper outputs {(DATA_W-MOD_ORDER)'b0, recovered_bits}.  When the
+ *   descrambler XORs its full DATA_W-bit Gold byte against this, the upper
+ *   (DATA_W-MOD_ORDER) bits of the output equal gold[DATA_W-1:MOD_ORDER]
+ *   instead of the original payload bits (which were discarded by the mapper).
+ *   m_axis_tdata is therefore masked to MOD_ORDER bits before leaving the
+ *   module.  Sequences must generate payloads limited to MOD_ORDER bits so
+ *   that the scoreboard comparison (rx.data == tx.payload) is well-defined.
+ *
  * Descrambler seeding:
  *   cinit_load is fired at the start of each transport block, detected by a
  *   rising edge on cp_remover's m_axis_tvalid after a gap longer than
@@ -70,6 +79,10 @@ module nr_rx_chain #(
 );
 
     localparam int unsigned IQ_W = SAMP_W / 2;
+
+    // Mask for the active payload bits.  The upper (DATA_W - MOD_ORDER) bits
+    // of the descrambler output are Gold-sequence artefacts and are zeroed here.
+    localparam logic [DATA_W-1:0] MOD_MASK = DATA_W'((1 << MOD_ORDER) - 1);
 
 
     /*
@@ -161,7 +174,11 @@ module nr_rx_chain #(
 
     /*
      * Descrambler output
+     *
+     * descr_tdata carries the raw XOR output, which has Gold-sequence bits in
+     * positions [DATA_W-1:MOD_ORDER].  Those bits are masked before m_axis_tdata.
      */
+    logic [DATA_W-1:0] descr_tdata;
 
     scrambler #(
         .DATA_W(DATA_W)
@@ -174,11 +191,15 @@ module nr_rx_chain #(
         .s_axis_tvalid(demap_valid),
         .s_axis_tlast (demap_last),
         .s_axis_tready(),                      // always ready
-        .m_axis_tdata (m_axis_tdata),
+        .m_axis_tdata (descr_tdata),
         .m_axis_tvalid(m_axis_tvalid),
         .m_axis_tlast (m_axis_tlast),
         .m_axis_tready(m_axis_tready)
     );
+
+    // Discard Gold-sequence artefacts in the upper (DATA_W - MOD_ORDER) bits.
+    // The qam_demapper zero-pads those bits; after XOR they equal gold[DATA_W-1:MOD_ORDER].
+    assign m_axis_tdata = descr_tdata & MOD_MASK;
 
 
     /*

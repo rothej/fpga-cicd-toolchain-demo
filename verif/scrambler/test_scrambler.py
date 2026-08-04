@@ -10,6 +10,8 @@ from verif.common.base_test import BaseTest
 from verif.scrambler.env import ScramblerEnv
 from verif.scrambler.sequences import AllZerosSeq, MultiCinitSeq, RandomDataSeq
 
+_DATA_W: int = 8
+
 
 class ScramblerBaseTest(BaseTest):
     """
@@ -23,11 +25,6 @@ class ScramblerBaseTest(BaseTest):
         ConfigDB().set(None, "*", "dut", cocotb.top)
         super().build_phase()
         ConfigDB().set(self, "*", "drain_cycles", 32)
-        ConfigDB().set(self, "*", "data_w", 8)
-        ConfigDB().set(self, "*", "cinit", 0x12345678 & 0x7FFFFFFF)
-        ConfigDB().set(self, "*", "min_len", 8)
-        ConfigDB().set(self, "*", "max_len", 256)
-        ConfigDB().set(self, "*", "count", 32)
         self.env = ScramblerEnv.create("env", self)
 
     async def pre_body(self) -> None:
@@ -47,7 +44,13 @@ class RandomDataTest(ScramblerBaseTest):
     """32 random-data packets, fixed cinit. Baseline scrambler check."""
 
     async def body(self) -> None:
-        await RandomDataSeq("rand_seq").start(self.env.tx_agent.sequencer)
+        seq = RandomDataSeq("rand_seq")
+        seq.cinit = 0x12345678 & 0x7FFFFFFF
+        seq.data_w = _DATA_W
+        seq.min_len = 8
+        seq.max_len = 256
+        seq.count = 32
+        await seq.start(self.env.tx_agent.sequencer)
 
 
 @pyuvm.test()
@@ -58,9 +61,12 @@ class AllZerosTest(ScramblerBaseTest):
     """
 
     async def body(self) -> None:
-        ConfigDB().set(self, "*", "length", 256)
-        ConfigDB().set(self, "*", "count", 4)
-        await AllZerosSeq("zeros_seq").start(self.env.tx_agent.sequencer)
+        seq = AllZerosSeq("zeros_seq")
+        seq.cinit = 0x12345678 & 0x7FFFFFFF
+        seq.data_w = _DATA_W
+        seq.length = 256
+        seq.count = 4
+        await seq.start(self.env.tx_agent.sequencer)
 
 
 @pyuvm.test()
@@ -71,7 +77,11 @@ class MultiCinitTest(ScramblerBaseTest):
     """
 
     async def body(self) -> None:
-        await MultiCinitSeq("multi_cinit_seq").start(self.env.tx_agent.sequencer)
+        seq = MultiCinitSeq("multi_cinit_seq")
+        seq.data_w = _DATA_W
+        seq.min_len = 16
+        seq.max_len = 128
+        await seq.start(self.env.tx_agent.sequencer)
 
 
 @pyuvm.test()
@@ -82,7 +92,10 @@ class LongPacketTest(ScramblerBaseTest):
     """
 
     async def body(self) -> None:
-        ConfigDB().set(self, "*", "min_len", 8192)
-        ConfigDB().set(self, "*", "max_len", 8192)
-        ConfigDB().set(self, "*", "count", 1)
-        await RandomDataSeq("long_seq").start(self.env.tx_agent.sequencer)
+        seq = RandomDataSeq("long_seq")
+        seq.cinit = 0x12345678 & 0x7FFFFFFF
+        seq.data_w = _DATA_W
+        seq.min_len = 8192
+        seq.max_len = 8192
+        seq.count = 1
+        await seq.start(self.env.tx_agent.sequencer)

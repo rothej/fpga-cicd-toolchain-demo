@@ -16,6 +16,12 @@ from verif.nr_chain.sequences import (
     VaryingCpVSeq,
 )
 
+_N_FFT: int = 64
+_CP_LEN_MAX: int = 16
+_SAMP_W: int = 16
+_DATA_W: int = 8
+_MOD_ORDER: int = 2  # must match Makefile -GMOD_ORDER; controls payload bit width
+
 
 class NrChainBaseTest(BaseTest):
     """
@@ -39,15 +45,15 @@ class NrChainBaseTest(BaseTest):
 
     def build_phase(self) -> None:
         ConfigDB().set(None, "*", "dut", cocotb.top)
-        super().build_phase()
+        # drain_cycles MUST be set before super().build_phase() because
+        # BaseTest.build_phase() reads it via _cfg(). Setting it afterward
+        # has no effect — the field is already assigned to the default (0).
         ConfigDB().set(self, "*", "drain_cycles", 4000)
-        ConfigDB().set(self, "*", "n_fft", 64)
-        ConfigDB().set(self, "*", "cp_len", 9)
-        ConfigDB().set(self, "*", "samp_w", 16)
-        ConfigDB().set(self, "*", "data_w", 8)
-        ConfigDB().set(self, "*", "payload_len", 64)
-        ConfigDB().set(self, "*", "scrambler_seed", 0x00_0001)
-        ConfigDB().set(self, "*", "count", 16)
+        super().build_phase()
+        # samp_w consumed by NrChainLoopbackMonitor (a component).
+        ConfigDB().set(self, "*", "samp_w", _SAMP_W)
+        # data_w consumed by NrChainDriver and NrChainOutputMonitor (components).
+        ConfigDB().set(self, "*", "data_w", _DATA_W)
         self.env = NrChainEnv.create("env", self)
 
     async def pre_body(self) -> None:
@@ -71,7 +77,14 @@ class DefaultLoopbackTest(NrChainBaseTest):
     """
 
     async def body(self) -> None:
-        await DefaultLoopbackVSeq("default_v").start(self.env.vseqr)
+        vseq = DefaultLoopbackVSeq("default_v")
+        vseq.payload_len = 64
+        vseq.cp_len = 9
+        vseq.scrambler_seed = 0x00_0001
+        vseq.data_w = _DATA_W
+        vseq.mod_order = _MOD_ORDER
+        vseq.count = 16
+        await vseq.start(self.env.vseqr)
 
 
 @pyuvm.test()
@@ -83,8 +96,13 @@ class VaryingCpTest(NrChainBaseTest):
     """
 
     async def body(self) -> None:
-        ConfigDB().set(self, "*", "cp_lens", [0, 4, 8, 12, 16])
-        await VaryingCpVSeq("varying_cp_v").start(self.env.vseqr)
+        vseq = VaryingCpVSeq("varying_cp_v")
+        vseq.payload_len = 64
+        vseq.scrambler_seed = 0x00_0001
+        vseq.data_w = _DATA_W
+        vseq.mod_order = _MOD_ORDER
+        vseq.cp_lens = [0, 4, 8, 12, 16]
+        await vseq.start(self.env.vseqr)
 
 
 @pyuvm.test()
@@ -96,13 +114,13 @@ class SeedSweepTest(NrChainBaseTest):
     """
 
     async def body(self) -> None:
-        ConfigDB().set(
-            self,
-            "*",
-            "scrambler_seeds",
-            [0x00_0001, 0x00_0003, 0xAB_CDEF, 0xFF_FFFF],
-        )
-        await SeedSweepVSeq("seed_sweep_v").start(self.env.vseqr)
+        vseq = SeedSweepVSeq("seed_sweep_v")
+        vseq.payload_len = 64
+        vseq.cp_len = 9
+        vseq.data_w = _DATA_W
+        vseq.mod_order = _MOD_ORDER
+        vseq.scrambler_seeds = [0x00_0001, 0x00_0003, 0xAB_CDEF, 0xFF_FFFF]
+        await vseq.start(self.env.vseqr)
 
 
 @pyuvm.test()
@@ -113,7 +131,12 @@ class MinPayloadTest(NrChainBaseTest):
     """
 
     async def body(self) -> None:
-        await MinPayloadLoopbackSeq("min_payload").start(self.env.tx_agent.sequencer)
+        seq = MinPayloadLoopbackSeq("min_payload")
+        seq.cp_len = 9
+        seq.scrambler_seed = 0x00_0001
+        seq.data_w = _DATA_W
+        seq.mod_order = _MOD_ORDER
+        await seq.start(self.env.tx_agent.sequencer)
 
 
 @pyuvm.test()
@@ -124,8 +147,14 @@ class MultiBlockBackToBackTest(NrChainBaseTest):
     """
 
     async def body(self) -> None:
-        ConfigDB().set(self, "*", "count", 32)
-        await DefaultLoopbackVSeq("multi_bt_v").start(self.env.vseqr)
+        vseq = DefaultLoopbackVSeq("multi_bt_v")
+        vseq.payload_len = 64
+        vseq.cp_len = 9
+        vseq.scrambler_seed = 0x00_0001
+        vseq.data_w = _DATA_W
+        vseq.mod_order = _MOD_ORDER
+        vseq.count = 32
+        await vseq.start(self.env.vseqr)
 
 
 @pyuvm.test()
@@ -133,19 +162,18 @@ class StressTest(NrChainBaseTest):
     """
     Three-phase stress: seed sweep -> varying CP -> 32 back-to-back blocks.
     Exercises all runtime parameter combinations in a single run.
-    The 4000-cycle drain is marginal for 32 blocks; increase to 8000 if
-    the pipeline stalls under the full stress sequence.
     """
 
     async def body(self) -> None:
-        ConfigDB().set(
-            self,
-            "*",
-            "scrambler_seeds",
-            [0x00_0001, 0x00_0003, 0xAB_CDEF, 0xFF_FFFF],
-        )
-        ConfigDB().set(self, "*", "cp_lens", [0, 4, 8, 12, 16])
-        await StressVSeq("stress_v").start(self.env.vseqr)
+        vseq = StressVSeq("stress_v")
+        vseq.payload_len = 64
+        vseq.cp_len = 9
+        vseq.data_w = _DATA_W
+        vseq.mod_order = _MOD_ORDER
+        vseq.scrambler_seeds = [0x00_0001, 0x00_0003, 0xAB_CDEF, 0xFF_FFFF]
+        vseq.cp_lens = [0, 4, 8, 12, 16]
+        vseq.multi_count = 32
+        await vseq.start(self.env.vseqr)
 
 
 @pyuvm.test()
@@ -156,5 +184,11 @@ class ZeroCpLoopbackTest(NrChainBaseTest):
     """
 
     async def body(self) -> None:
-        ConfigDB().set(self, "*", "cp_len", 0)
-        await DefaultLoopbackVSeq("zero_cp_v").start(self.env.vseqr)
+        vseq = DefaultLoopbackVSeq("zero_cp_v")
+        vseq.payload_len = 64
+        vseq.cp_len = 0
+        vseq.scrambler_seed = 0x00_0001
+        vseq.data_w = _DATA_W
+        vseq.mod_order = _MOD_ORDER
+        vseq.count = 16
+        await vseq.start(self.env.vseqr)

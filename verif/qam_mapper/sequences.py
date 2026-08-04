@@ -6,32 +6,31 @@ import random
 
 from pyuvm import uvm_sequence
 
-from verif.common.config_utils import _cfg
 from verif.qam_mapper.seq_item import QamMapperSeqItem
 
 _ALL_MOD_ORDERS: list[int] = [2, 4, 6, 8]  # QPSK -> 256-QAM
 
 
 class RandomDataSeq(uvm_sequence):
-    """
-    N packets of random data at a fixed mod_order.
+    """count packets of random data at a fixed mod_order."""
 
-    ConfigDB keys: mod_order, data_w, min_len, max_len, count
-    """
+    def __init__(self, name: str = "RandomDataSeq") -> None:
+        super().__init__(name)
+        self.mod_order: int = 2
+        self.data_w: int = 8
+        self.min_len: int = 8
+        self.max_len: int = 256
+        self.count: int = 32
 
     async def body(self) -> None:
-        mod_order = _cfg(self, "mod_order", 2)
-        data_w = _cfg(self, "data_w", 8)
-        min_len = _cfg(self, "min_len", 8)
-        max_len = _cfg(self, "max_len", 256)
-        count = _cfg(self, "count", 32)
-        mask = (1 << mod_order) - 1  # upper bits zero-padded
-
-        for _ in range(count):
+        mask = (1 << self.mod_order) - 1
+        for _ in range(self.count):
             item = QamMapperSeqItem()
-            item.mod_order = mod_order
-            item.data_w = data_w
-            item.data = [random.randint(0, mask) for _ in range(random.randint(min_len, max_len))]
+            item.mod_order = self.mod_order
+            item.data_w = self.data_w
+            item.data = [
+                random.randint(0, mask) for _ in range(random.randint(self.min_len, self.max_len))
+            ]
             await self.start_item(item)
             await self.finish_item(item)
 
@@ -42,21 +41,23 @@ class AllModOrdersSeq(uvm_sequence):
 
     Verifies that the DUT correctly reconfigures when mod_order changes
     between back-to-back packets.
-
-    ConfigDB keys: data_w, min_len, max_len
     """
 
-    async def body(self) -> None:
-        data_w = _cfg(self, "data_w", 8)
-        min_len = _cfg(self, "min_len", 16)
-        max_len = _cfg(self, "max_len", 128)
+    def __init__(self, name: str = "AllModOrdersSeq") -> None:
+        super().__init__(name)
+        self.data_w: int = 8
+        self.min_len: int = 16
+        self.max_len: int = 128
 
+    async def body(self) -> None:
         for mo in _ALL_MOD_ORDERS:
             mask = (1 << mo) - 1
             item = QamMapperSeqItem()
             item.mod_order = mo
-            item.data_w = data_w
-            item.data = [random.randint(0, mask) for _ in range(random.randint(min_len, max_len))]
+            item.data_w = self.data_w
+            item.data = [
+                random.randint(0, mask) for _ in range(random.randint(self.min_len, self.max_len))
+            ]
             await self.start_item(item)
             await self.finish_item(item)
 
@@ -68,20 +69,19 @@ class AllConstellationPointsSeq(uvm_sequence):
     Guarantees every constellation point is exercised exactly once.
     Practical for all four mod_order values: 4, 16, 64, and 256 words
     respectively - all fast in simulation.
-
-    ConfigDB keys: mod_order, data_w
     """
 
+    def __init__(self, name: str = "AllConstellationPointsSeq") -> None:
+        super().__init__(name)
+        self.mod_order: int = 4
+        self.data_w: int = 8
+
     async def body(self) -> None:
-        mod_order = _cfg(self, "mod_order", 4)
-        data_w = _cfg(self, "data_w", 8)
-
-        all_words = list(range(1 << mod_order))
-        random.shuffle(all_words)  # avoid systematic ordering artefacts
-
+        all_words = list(range(1 << self.mod_order))
+        random.shuffle(all_words)
         item = QamMapperSeqItem()
-        item.mod_order = mod_order
-        item.data_w = data_w
+        item.mod_order = self.mod_order
+        item.data_w = self.data_w
         item.data = all_words
         await self.start_item(item)
         await self.finish_item(item)

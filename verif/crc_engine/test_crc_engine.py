@@ -4,10 +4,6 @@
 verif/crc_engine/test_crc_engine.py
 
 Concrete test classes for the crc_engine testbench.
-
-Follows the same BaseTest pattern as all other unit TBs.
-The sim/crc_engine/Makefile's run-* sub-targets select individual
-tests via COCOTB_TESTCASE=<ClassName>.
 """
 
 from __future__ import annotations
@@ -41,6 +37,7 @@ class CrcEngineBaseTest(BaseTest):
         ConfigDB().set(None, "*", "dut", cocotb.top)
         super().build_phase()
         ConfigDB().set(self, "*", "drain_cycles", 32)
+        # crc_poly and crc_width consumed by CrcScoreboard (a component).
         ConfigDB().set(self, "*", "crc_poly", _CRC_POLY)
         ConfigDB().set(self, "*", "crc_width", _CRC_WIDTH)
         self.env = CrcEngineEnv.create("env", self)
@@ -62,9 +59,8 @@ class TestCrcKnownVectors(CrcEngineBaseTest):
     """
     Drive _KNOWN_PAYLOADS and check DUT output against crc_compute().
 
-    Because the scoreboard derives expected values from the reference model
-    at run time, this test simultaneously validates both the reference model
-    and the DUT for every payload in the fixed set.
+    Simultaneously validates both the reference model and the DUT for every
+    payload in the fixed set.
     """
 
     async def body(self) -> None:
@@ -76,18 +72,16 @@ class TestCrcRandom(CrcEngineBaseTest):
     """
     64 random payloads, seeded for reproducibility.
 
-    Seed 0xC0DE is arbitrary. Override via ConfigDB to sweep seeds in CI.
+    Seed 0xC0DE is arbitrary; override seq.seed to sweep seeds in CI.
     """
 
-    def build_phase(self) -> None:
-        super().build_phase()
-        ConfigDB().set(self, "*", "rand_count", 64)
-        ConfigDB().set(self, "*", "rand_min_len", 1)
-        ConfigDB().set(self, "*", "rand_max_len", 128)
-        ConfigDB().set(self, "*", "rand_seed", 0xC0DE)
-
     async def body(self) -> None:
-        await CrcRandomSeq("random_seq").start(self.env.tx_agent.sequencer)
+        seq = CrcRandomSeq("random_seq")
+        seq.count = 64
+        seq.min_len = 1
+        seq.max_len = 128
+        seq.seed = 0xC0DE
+        await seq.start(self.env.tx_agent.sequencer)
 
 
 @pyuvm.test()

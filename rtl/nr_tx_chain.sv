@@ -19,22 +19,40 @@
  *   qam_mapper   : 1 cycle (registered output)
  *   cp_inserter  : N_FFT cycles (fill buffer) + combinational output
  *
- * Scrambler seeding:
- *   The scrambler is re-seeded (cinit_load) once before each transport block.
- *   A need_cinit flag is set at reset and after each m_axis_tlast. It fires
- *   cinit_load on the first idle cycle (s_axis_tvalid = 0) thereafter.
- *   The driver protocol guarantees at least one idle cycle between the
- *   sideband setup and the first s_axis_tvalid of each transport block.
+ * Scrambler re-seed protocol (TX_CINIT / TX_IDLE state machine)
+ * ---------------------------------------------------------------
+ * The scrambler must reload once before byte 0 of every transport block, and
+ * must not reload mid-block.  Two constraints make a passive idle-window
+ * approach unworkable:
+ *
+ *   (a) AXI-S requires the initiator to hold tvalid high until tready is
+ *       asserted; there is never a guaranteed tvalid=0 gap between blocks.
+ *
+ *   (b) Each 64-byte / QPSK transport block spans four OFDM symbols (256
+ *       mapper outputs / N_FFT=64).  An EMIT->FILL edge trigger would fire
+ *       four times per block, reloading the LFSR mid-stream.
+ *
+ * The state machine actively creates a one-cycle tready=0 window:
+ *
+ *   TX_CINIT  tready=0 (CINIT gating).  On the first tvalid=1 of each new
+ *             block, tx_cinit_load fires combinationally (the LFSR reloads
+ *             from scrambler_seed), and the state transitions to TX_IDLE.
+ *             Byte 0 is held off this cycle; it is accepted on the next.
+ *
+ *   TX_IDLE   Normal operation.  tready=sym_ready (cp_inserter backpressure).
+ *             Returns to TX_CINIT on the last accepted input byte (tlast).
+ *
+ * Backpressure propagation:
+ *   s_axis_tready = sym_ready && (tx_state == TX_IDLE).
+ *   The scrambler's tvalid input is gated with s_axis_tready so the LFSR
+ *   only advances on cycles where data is actually consumed by the pipeline.
+ *   Without this gate, the LFSR advances during cp_inserter EMIT stalls,
+ *   desynchronising the TX Gold sequence from the RX descrambler.
  *
  * Note on CRC: CRC attachment is not performed in this wrapper; transport
  * block payload is scrambled, mapped, and CP-inserted directly. CRC
  * verification is exercised independently by the crc_engine / crc_checker
- * unit testbenches. Integration-level data-path correctness is validated
- * through the scoreboard's payload comparison (rx.data == tx.payload).
- *
- * All sub-module parameters and runtime configuration ports are derived from
- * the top-level parameters and sideband inputs. mod_order is a compile-time
- * parameter; cp_len and scrambler_seed are runtime sidebands.
+ * unit testbenches.
  */
 
 `timescale 1ns / 1ps
@@ -69,29 +87,51 @@ module nr_tx_chain #(
 
     localparam int unsigned IQ_W = SAMP_W / 2;  // per-component width
 
+    /*
+     * sym_ready: cp_inserter.s_axis_tready.
+     * Declared early; driven by the cp_inserter port connection at the bottom.
+     * 1 during FILL (accepting symbols), 0 during EMIT (outputting OFDM symbol).
+     */
+    logic sym_ready;
+
 
     /*
-     * Scrambler re-seed logic
+     * TX cinit state machine
      *
-     * need_cinit is set at reset and after each completed transport block
-     * (m_axis_tlast). cinit_load fires on the first idle input cycle thereafter.
+     * TX_CINIT : holds s_axis_tready=0; fires tx_cinit_load on the first
+     *            tvalid=1 of the new block; transitions to TX_IDLE immediately
+     *            so tready releases on the following cycle.
+     *
+     * TX_IDLE  : normal operation; re-arms (-> TX_CINIT) on s_axis_tlast.
+     *
+     * Reset enters TX_CINIT so the very first block is seeded before byte 0.
      */
-    logic need_cinit;
-    logic tx_cinit_load;
+    localparam logic TX_IDLE = 1'b0;
+    localparam logic TX_CINIT = 1'b1;
 
-    assign tx_cinit_load = need_cinit && !s_axis_tvalid;
+    logic tx_state;
+    logic tx_cinit_load;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            need_cinit <= 1'b1;
-        end else begin
-            if (m_axis_tvalid && m_axis_tlast && m_axis_tready) begin
-                need_cinit <= 1'b1;
-            end else if (tx_cinit_load) begin
-                need_cinit <= 1'b0;
-            end
+            tx_state <= TX_CINIT;
+        end else if (tx_state == TX_CINIT) begin
+            // Fire cinit this cycle (combinational below), release tready next.
+            if (s_axis_tvalid) tx_state <= TX_IDLE;
+        end else begin  // TX_IDLE
+            // Re-arm at the end of the transport block.
+            if (s_axis_tvalid && s_axis_tready && s_axis_tlast) tx_state <= TX_CINIT;
         end
     end
+
+    // tx_cinit_load: combinational, fires exactly once per block.
+    // tready=0 this cycle (CINIT gating) -> byte 0 is NOT accepted yet.
+    // On the next cycle tx_state=IDLE, tready=sym_ready, byte 0 is accepted
+    // with the freshly loaded LFSR.
+    assign tx_cinit_load = (tx_state == TX_CINIT) && s_axis_tvalid;
+
+    // s_axis_tready: propagate cp_inserter backpressure AND hold low in CINIT.
+    assign s_axis_tready = sym_ready && (tx_state == TX_IDLE);
 
 
     /*
@@ -110,10 +150,13 @@ module nr_tx_chain #(
         .rst_n        (rst_n),
         .cinit_load   (tx_cinit_load),
         .cinit        (scrambler_seed[30:0]),
+        // Gate tvalid with s_axis_tready: LFSR advances only when data is
+        // consumed by the pipeline. Without this gate the LFSR runs ahead
+        // during cp_inserter EMIT stalls, desynchronising TX and RX.
         .s_axis_tdata (s_axis_tdata),
-        .s_axis_tvalid(s_axis_tvalid),
+        .s_axis_tvalid(s_axis_tvalid && s_axis_tready),
         .s_axis_tlast (s_axis_tlast),
-        .s_axis_tready(s_axis_tready),
+        .s_axis_tready(),                                // always 1 internally; not routed up
         .m_axis_tdata (scr_data),
         .m_axis_tvalid(scr_valid),
         .m_axis_tlast (scr_last),
@@ -128,7 +171,6 @@ module nr_tx_chain #(
     logic [SAMP_W-1:0] sym_data;
     logic              sym_valid;
     logic              sym_last;
-    logic              sym_ready;
 
     qam_mapper #(
         .DATA_W(DATA_W),
@@ -150,6 +192,9 @@ module nr_tx_chain #(
 
     /*
      * cp_inserter output
+     *
+     * sym_ready is driven here (cp_inserter.s_axis_tready) and read above
+     * by the cinit state machine and the s_axis_tready assignment.
      */
 
     cp_inserter #(
