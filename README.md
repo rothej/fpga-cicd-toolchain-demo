@@ -211,6 +211,7 @@ Verilator is invoked with --coverage (line, toggle, and branch) on every sim run
 
 Each unit TB follows the same layered structure:
 
+```
 uvm_test
 └── uvm_env
     ├── TX uvm_agent (AXI4-Stream)       # verif/common/axis_agent.py
@@ -224,6 +225,7 @@ uvm_test
     ├── uvm_scoreboard
     │   └── uvm_tlm_analysis_fifo        # TX monitor -> scoreboard -> check
     └── uvm_coverage_collector
+```
 
 The nr_chain integration TB adds a virtual sequencer at the top level to coordinate TX and RX stimulus across the full loopback path.
 
