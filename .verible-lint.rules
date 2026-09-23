@@ -13,8 +13,31 @@
 # Enforce explicit parameter types
 +explicit-parameter-storage-type
 
-# Keep trailing whitespace check
+# Require explicit lifetime for tasks/functions
++explicit-task-lifetime
++explicit-function-lifetime
+
+# Whitespace
 +no-trailing-spaces
++no-tabs
 
 # Keep check for proper file endings
 +posix-eof
+
+# Good Practices
++always-comb
++always-comb-blocking
++always-ff-non-blocking
++typedef-enums
++typedef-structs-unions
++forbid-defparam
++suggest-parentheses
++packed-dimensions-range-ordering
+
+# Disable overly strict rules for testbenches
+# Allow x and z in literals without full width
+-undersized-binary-literal
+
+# Allow generate blocks without explicit labels
+-generate-label
+-generate-label-prefix

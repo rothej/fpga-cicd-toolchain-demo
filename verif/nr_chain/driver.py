@@ -16,10 +16,14 @@ class NrChainDriver(uvm_driver):
     Protocol per transport block:
       1. Present cp_len and scrambler_seed one cycle before tvalid.
       2. Drive each payload byte on s_axis_tdata with tready backpressure.
-      3. Assert tlast on the final payload byte (CRC is appended internally
-         by the TX chain - the driver does not transmit CRC bytes).
+      3. Assert tlast on the final payload byte.
+      4. Wait for m_axis_tlast at the RX output before releasing the item.
+         This holds scrambler_seed stable until the RX descrambler has
+         finished processing the block - the sideband must remain valid
+         from TX cinit_load through RX cinit_load.
 
-    Publishes NrChainSeqItem to ap after the last byte is accepted.
+    Publishes NrChainSeqItem to ap after m_axis_tlast confirms the block
+    has fully exited the RX chain.
     """
 
     def build_phase(self) -> None:
@@ -39,6 +43,7 @@ class NrChainDriver(uvm_driver):
             item: NrChainSeqItem = await self.seq_item_port.get_next_item()
             await self._set_sideband(item)
             await self._drive(item)
+            await self._wait_for_rx_output()  # hold seed until block exits RX chain
             self.seq_item_port.item_done()
             self.ap.write(item)
 
@@ -63,3 +68,24 @@ class NrChainDriver(uvm_driver):
 
         dut.s_axis_tvalid.value = 0
         dut.s_axis_tlast.value = 0
+
+    async def _wait_for_rx_output(self) -> None:
+        """
+        Block until m_axis_tlast pulses at the RX output.
+
+        scrambler_seed must not change until this point: the RX chain's
+        rx_cinit_load detection fires when the first PASS sample exits
+        cp_remover, which is cp_len + N_FFT + pipeline_latency cycles
+        after the last TX byte was accepted - well after _drive() returns.
+        Waiting for m_axis_tlast guarantees the descrambler has finished
+        and the seed is safe to change for the next block.
+        """
+        dut = self.dut
+        while True:
+            await RisingEdge(dut.clk)
+            if (
+                int(dut.m_axis_tvalid.value)
+                and int(dut.m_axis_tready.value)
+                and int(dut.m_axis_tlast.value)
+            ):
+                break

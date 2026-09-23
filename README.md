@@ -13,7 +13,7 @@ The DUT is a parameterizable 5G NR physical-layer chain implemented across multi
 ### First Time
 Install:
 ```
-sudo apt install direnv expect
+sudo apt install direnv expect lcov
 ```
 
 Run:
@@ -125,9 +125,16 @@ Managed via `pyproject.toml`. Installed automatically during setup.
 
 For makefile functionality, run:
 ```
-sudo apt install expect
+sudo apt install -y expect lcov
 ```
-This package lets the terminal print green/red colors while exporting plain text to log files.
+`expect` lets the terminal print green/red colors while exporting plain text to log files. `lcov` enabled HTML viewer functionality.
+
+You will also want to install the following for a better waveform viewing experience (optional, not a package managed solution so an enterprise environment may not approve):
+```bash
+sudo apt install -y cargo
+cargo install --git https://gitlab.com/surfer-project/surfer surfer
+
+```
 
 ### Method 1: With direnv (Recommended)
 
@@ -207,6 +214,29 @@ sudo apt-get install -y gtkwave
 
 Verilator is invoked with --coverage (line, toggle, and branch) on every sim run. Functional coverage is collected per-module by a uvm_coverage_collector component via pyuvm.
 
+To view the HTML report and see what coverage is missing, run:
+```bash
+xdg-open sim/coverage_html/index.html
+```
+
+If you are SSHing into this system using VSCode as your frontend, you can instead run on your backend:
+```bash
+make coverage-serve
+```
+In the Ports tab of VSCode, you'll be able to open 8080 and view the html report. Or you can view it at `http://localhost:8080`.
+
+The reports will look like this; simple and clear:
+
+![Coverage Report - Overall](docs/img/lcov_code_covr_top.png)
+
+And if you click `rtl` you get the detailed report:
+
+![Coverage Report - Detailed](docs/img/lcov_code_covr_detail.png)
+
+Note: This report was generated earlier on in the project. Some required a more comphrehensive test bench, while others required exclusion pragmas (an unreachable default case, written to avoid latch inferrence, was a common culprit).
+
+![Example of Exclusion Pragma](docs/img/pragma_ex.png)
+
 ### UVM Architecture
 
 Each unit TB follows the same layered structure:
@@ -214,16 +244,16 @@ Each unit TB follows the same layered structure:
 ```
 uvm_test
 └── uvm_env
-    ├── TX uvm_agent (AXI4-Stream)       # verif/common/axis_agent.py
+    ├── TX uvm_agent (AXI4-Stream)        # verif/common/axis_agent.py
     │   ├── Driver
     │   ├── Monitor -> uvm_analysis_port
     │   └── uvm_sequencer
-    ├── RX uvm_agent (AXI4-Stream)       # verif/common/axis_agent.py
+    ├── RX uvm_agent (AXI4-Stream)        # verif/common/axis_agent.py
     │   ├── Driver
     │   ├── Monitor -> uvm_analysis_port
     │   └── uvm_sequencer
     ├── uvm_scoreboard
-    │   └── uvm_tlm_analysis_fifo        # TX monitor -> scoreboard -> check
+    │   └── uvm_tlm_analysis_fifo         # TX monitor -> scoreboard -> check
     └── uvm_coverage_collector
 ```
 

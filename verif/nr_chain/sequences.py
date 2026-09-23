@@ -102,6 +102,7 @@ class MinPayloadLoopbackSeq(uvm_sequence):
 
     def __init__(self, name: str = "MinPayloadLoopbackSeq") -> None:
         super().__init__(name)
+        self.n_fft: int = 64  # one complete OFDM symbol
         self.cp_len: int = 9
         self.scrambler_seed: int = 0x00_0001
         self.data_w: int = 8
@@ -110,7 +111,7 @@ class MinPayloadLoopbackSeq(uvm_sequence):
     async def body(self) -> None:
         mask = (1 << self.mod_order) - 1  # was: (1 << self.data_w) - 1
         item = NrChainSeqItem()
-        item.payload = [random.randint(0, mask)]
+        item.payload = [random.randint(0, mask) for _ in range(self.n_fft)]
         item.cp_len = self.cp_len
         item.scrambler_seed = self.scrambler_seed
         item.data_w = self.data_w

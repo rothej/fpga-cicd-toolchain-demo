@@ -40,6 +40,10 @@ results.xml
 *.fst
 *.fst.hier
 __pycache__/
+sim/coverage.info
+sim/coverage_merged.dat
+sim/*/coverage.dat
+coverage_html/
 
 #############################################################################
 # Verible / Linting

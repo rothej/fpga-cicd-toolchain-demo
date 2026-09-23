@@ -12,6 +12,11 @@ repos:
         args: ['--maxkb=1000']
       - id: check-merge-conflict
       - id: mixed-line-ending
+      - id: check-ast
+      - id: check-builtin-literals
+      - id: fix-byte-order-marker
+      - id: check-case-conflict
+      - id: check-docstring-first
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.22
@@ -51,3 +56,5 @@ repos:
         language: system
         files: '\.sv$|\.v$'
         args: ['--rules_config=.verible-lint.rules']
+
+default_stages: [pre-commit, pre-push]

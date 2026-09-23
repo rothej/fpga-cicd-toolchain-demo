@@ -132,6 +132,7 @@ class MinPayloadTest(NrChainBaseTest):
 
     async def body(self) -> None:
         seq = MinPayloadLoopbackSeq("min_payload")
+        seq.n_fft = _N_FFT
         seq.cp_len = 9
         seq.scrambler_seed = 0x00_0001
         seq.data_w = _DATA_W

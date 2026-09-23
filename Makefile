@@ -12,6 +12,10 @@ UNIT_MODULES :=  \
     cp_inserter  \
     cp_remover
 
+COVERAGE_MERGED := sim/coverage_merged.dat
+COVERAGE_INFO   := sim/coverage.info
+COVERAGE_HTML   := sim/coverage_html
+
 # Logging
 _LOG_DIR  := logs
 _LOG_FILE  = $(_LOG_DIR)/$(firstword $(MAKECMDGOALS)).log
@@ -23,14 +27,15 @@ $(MAKECMDGOALS):
 	@mkdir -p $(_LOG_DIR)
 	+unbuffer -p $(MAKE) $@ _LOGGED=1 2>&1 | tee >(sed 's/\x1b\[[0-9;]*m//g' > $(_LOG_FILE))
 else
-# ── real targets ── only reached on re-invocation with _LOGGED=1 ────────────
+# real targets, only reached on re-invocation with _LOGGED=1
 
 # Phony targets
 .PHONY: help setup \
         sim unit-sim integration-sim \
         $(addprefix sim-,$(UNIT_MODULES)) \
-        test lint format \
-        waves clean clean-sim clean-tools
+        coverage coverage-serve test lint \
+		format waves clean clean-sim \
+		clean-tools
 
 # Help
 help:
@@ -80,7 +85,33 @@ unit-sim: $(addprefix sim-,$(UNIT_MODULES))
 integration-sim:
 	$(MAKE) -C sim/nr_chain
 
-sim: unit-sim integration-sim
+sim: unit-sim integration-sim coverage
+
+coverage:
+	@echo "-> Merging coverage data..."
+	@verilator_coverage --write $(COVERAGE_MERGED) \
+	    $(shell find sim -name "coverage.dat")
+	@echo "-> Writing lcov info..."
+	@verilator_coverage --write-info $(COVERAGE_INFO) $(COVERAGE_MERGED)
+	@if command -v genhtml >/dev/null 2>&1; then \
+	    genhtml \
+	        --title "fpga-cicd-toolchain-demo" \
+	        --branch-coverage \
+	        --function-coverage \
+	        --show-details \
+			--exclude "*/sim/*" \
+	        --output-directory $(COVERAGE_HTML) \
+	        $(COVERAGE_INFO); \
+	    echo "-> HTML report: $(COVERAGE_HTML)/index.html"; \
+	else \
+	    echo "-> genhtml not found: sudo apt-get install -y lcov"; \
+	fi
+
+coverage-serve:
+	@echo "-> Serving coverage report at http://localhost:8080"
+	@echo "-> VS Code: Ports tab will auto-forward"
+	@echo "-> Ctrl+C to stop"
+	python3 -m http.server 8080 --directory $(COVERAGE_HTML)
 
 # Python tests (no simulator)
 test:
@@ -89,12 +120,18 @@ test:
 # Waveforms
 waves:
 	@[ -n "$(MODULE)" ] || \
-		{ echo "Usage: make waves MODULE=<module>"; \
-		  echo "Modules: $(UNIT_MODULES) nr_chain"; exit 1; }
-	@command -v gtkwave >/dev/null 2>&1 || \
-		{ echo "gtkwave not found: sudo apt-get install -y gtkwave"; exit 1; }
+	    { echo "Usage: make waves MODULE=<module>"; \
+	      echo "Modules: $(UNIT_MODULES) nr_chain"; exit 1; }
 	$(MAKE) -C sim/$(MODULE) waves
-	gtkwave sim/$(MODULE)/sim_build/dump.fst &
+	@if command -v gtkwave >/dev/null 2>&1; then \
+	    gtkwave sim/$(MODULE)/sim_build/dump.fst & \
+	elif command -v surfer >/dev/null 2>&1; then \
+	    surfer sim/$(MODULE)/sim_build/dump.fst & \
+	else \
+	    echo "No waveform viewer found."; \
+	    echo "  gtkwave:          sudo apt-get install -y gtkwave"; \
+	    echo "  surfer (modern):  cargo install --git https://gitlab.com/surfer-project/surfer surfer"; \
+	fi
 
 # Lint
 lint:
@@ -126,6 +163,8 @@ clean-sim:
 	@for m in $(UNIT_MODULES) nr_chain; do \
 		$(MAKE) -C sim/$$m clean --no-print-directory 2>/dev/null || true; \
 	done
+	rm -f $(COVERAGE_MERGED) $(COVERAGE_INFO)
+	rm -rf $(COVERAGE_HTML)
 
 clean-tools:
 	rm -rf .tools/

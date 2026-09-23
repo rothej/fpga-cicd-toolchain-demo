@@ -49,7 +49,9 @@ package crc_pkg;
             CRC16:   return 16;
             CRC11:   return 11;
             CRC6:    return 6;
+            // verilator coverage_off
             default: return 0;
+            // verilator coverage_on
         endcase
     endfunction : get_crc_width
 
@@ -75,7 +77,9 @@ package crc_pkg;
             CRC16:   return 24'h001021;
             CRC11:   return 24'h000621;
             CRC6:    return 24'h000021;
+            // verilator coverage_off
             default: return 24'h000000;
+            // verilator coverage_on
         endcase  // crc_type
     endfunction : get_crc_poly
 
@@ -94,9 +98,11 @@ package crc_pkg;
     function automatic crc_word_t get_crc_mask(input crc_type_e crc_type);
         int unsigned w;
         w = get_crc_width(crc_type);
+        // verilator coverage_off
         if (w == 0) begin
             return '0;
         end
+        // verilator coverage_on
         if (w == CRC_WIDTH_MAX) begin
             return '1;
         end

@@ -96,3 +96,78 @@ class Crc16Test(CrcCheckerBaseTest):
         seq.max_len = 128
         seq.count = 64
         await seq.start(self.env.tx_agent.sequencer)
+
+
+@pyuvm.test()
+class Crc24BTest(CrcCheckerBaseTest):
+    """
+    32 valid/corrupt CRC24B packets (code-block segmentation path).
+
+    crc_type=1 maps to CRC24B (3'b001) in crc_pkg.sv.
+    Exercises get_crc_width/poly/mask case arm 1 for the first time.
+    """
+
+    async def body(self) -> None:
+        seq = RandomMixSeq("crc24b_seq")
+        seq.crc_type = 1  # CRC24B = 3'b001
+        seq.min_len = 1
+        seq.max_len = 128
+        seq.count = 32
+        seq.corrupt_ratio = 0.5
+        await seq.start(self.env.tx_agent.sequencer)
+
+
+@pyuvm.test()
+class Crc24CTest(CrcCheckerBaseTest):
+    """
+    32 valid/corrupt CRC24C packets (UL-SCH, LDPC base graph 1).
+
+    crc_type=2 maps to CRC24C (3'b010) in crc_pkg.sv.
+    """
+
+    async def body(self) -> None:
+        seq = RandomMixSeq("crc24c_seq")
+        seq.crc_type = 2  # CRC24C = 3'b010
+        seq.min_len = 1
+        seq.max_len = 128
+        seq.count = 32
+        seq.corrupt_ratio = 0.5
+        await seq.start(self.env.tx_agent.sequencer)
+
+
+@pyuvm.test()
+class Crc11Test(CrcCheckerBaseTest):
+    """
+    32 valid/corrupt CRC11 packets (UCI on PUCCH formats 2/3/4).
+
+    crc_type=4 maps to CRC11 (3'b100) in crc_pkg.sv.
+    Exercises the 11-bit mask path in get_crc_mask for the first time.
+    """
+
+    async def body(self) -> None:
+        seq = RandomMixSeq("crc11_seq")
+        seq.crc_type = 4  # CRC11 = 3'b100
+        seq.min_len = 1
+        seq.max_len = 32
+        seq.count = 32
+        seq.corrupt_ratio = 0.5
+        await seq.start(self.env.tx_agent.sequencer)
+
+
+@pyuvm.test()
+class Crc6Test(CrcCheckerBaseTest):
+    """
+    32 valid/corrupt CRC6 packets (UCI on PUCCH, payload <= 11 bits).
+
+    crc_type=5 maps to CRC6 (3'b101) in crc_pkg.sv.
+    Exercises the 6-bit mask path in get_crc_mask for the first time.
+    """
+
+    async def body(self) -> None:
+        seq = RandomMixSeq("crc6_seq")
+        seq.crc_type = 5  # CRC6 = 3'b101
+        seq.min_len = 1
+        seq.max_len = 4
+        seq.count = 32
+        seq.corrupt_ratio = 0.5
+        await seq.start(self.env.tx_agent.sequencer)
