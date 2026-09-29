@@ -1,7 +1,7 @@
 # sim/cp_remover/Makefile
 DUT      := cp_remover
 TOPLEVEL := cp_remover
-COCOTB_TEST_MODULES := verif.cp_remover.test_cp_remover
+COCOTB_TEST_MODULES := verif.cp_remover.test.test_cp_remover
 
 include ../common.mk
 

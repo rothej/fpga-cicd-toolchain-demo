@@ -33,7 +33,8 @@ export PATH    := $(TOOLS_DIR)/verilator/bin:$(PATH)
 # REPO_ROOT on PYTHONPATH lets cocotb resolve MODULE as a dotted package path:
 #   MODULE := verif.crc_engine.test_crc_engine
 #   -> importlib.import_module("verif.crc_engine.test_crc_engine")
-# Requires verif/__init__.py and verif/<dut>/__init__.py to exist.
+# Requires verif/__init__.py, verif/<dut>/__init__.py, and
+# verif/<dut>/test/__init__.py to exist.
 
 export PYTHONPATH := $(REPO_ROOT):$(PYTHONPATH)
 

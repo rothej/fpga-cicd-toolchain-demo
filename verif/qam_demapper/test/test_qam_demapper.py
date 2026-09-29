@@ -145,3 +145,31 @@ class AllSixteenQamConstellationPointsTest(QamDemapperBaseTest):
         seq.mod_order = 4
         seq.iq_w = _IQ_W
         await seq.start(self.env.tx_agent.sequencer)
+
+
+@pyuvm.test()
+class AllSixtyFourQamConstellationPointsTest(QamDemapperBaseTest):
+    """
+    All 64 constellation points of 64-QAM in a single packet.
+    Drives all 8 decision regions of demap_qam64() on both I and Q axes.
+    """
+
+    async def body(self) -> None:
+        seq = AllConstellationPointsSeq("64qam_pts_seq")
+        seq.mod_order = 6
+        seq.iq_w = _IQ_W
+        await seq.start(self.env.tx_agent.sequencer)
+
+
+@pyuvm.test()
+class AllTwoFiftySixQamConstellationPointsTest(QamDemapperBaseTest):
+    """
+    All 256 constellation points of 256-QAM in a single packet.
+    Drives all 15 decision regions of demap_qam256() on both I and Q axes.
+    """
+
+    async def body(self) -> None:
+        seq = AllConstellationPointsSeq("256qam_pts_seq")
+        seq.mod_order = 8
+        seq.iq_w = _IQ_W
+        await seq.start(self.env.tx_agent.sequencer)

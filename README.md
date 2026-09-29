@@ -40,7 +40,7 @@ Replace module as appropriate.
 
 ## Folder Structure
 
-```
+```pgsql
 fpga-cicd-toolchain-demo/
 ├── .github/
 │ └── workflows/
@@ -63,15 +63,24 @@ fpga-cicd-toolchain-demo/
 │ ├── common/               # Shared UVM components
 │ │ ├── axis_agent.py       # Reusable AXI4-Stream agent
 │ │ ├── base_test.py        # Base test class
-│ │ └── nr_ref_model.py     # Golden reference model
+│ │ ├── nr_ref_model.py     # Golden reference model
+│ │ └── tests/              # Pure-Python pytest unit tests (no simulator)
 │ ├── crc_engine/
+│ │ └── test/               # @pyuvm.test() entry points
 │ ├── crc_checker/
+│ │ └── test/
 │ ├── scrambler/
+│ │ └── test/
 │ ├── qam_mapper/
+│ │ └── test/
 │ ├── qam_demapper/
+│ │ └── test/
 │ ├── cp_inserter/
+│ │ └── test/
 │ ├── cp_remover/
+│ │ └── test/
 │ └── nr_chain/             # Integration TB (virtual sequencer)
+│   └── test/
 ├── sim/                    # Per-module Makefiles
 │ ├── common.mk             # Shared Verilator/cocotb config
 │ ├── crc_engine/
@@ -112,14 +121,14 @@ fpga-cicd-toolchain-demo/
 
 Managed via `pyproject.toml`. Installed automatically during setup.
 
-| Package | Purpose |
-|---|---|
-| cocotb | Hardware co-simulation framework |
-| cocotb-tools | Verilator runner integration |
-| pyuvm | Python UVM framework |
-| ruff | Python linter and formatter |
-| mypy | Static type checker |
-| pre-commit | Git hook manager |
+| Package      | Purpose                          |
+|--------------|----------------------------------|
+| cocotb       | Hardware co-simulation framework |
+| cocotb-tools | Verilator runner integration     |
+| pyuvm        | Python UVM framework             |
+| ruff         | Python linter and formatter      |
+| mypy         | Static type checker              |
+| pre-commit   | Git hook manager                 |
 
 ## Setup
 
@@ -127,7 +136,7 @@ For makefile functionality, run:
 ```
 sudo apt install -y expect lcov
 ```
-`expect` lets the terminal print green/red colors while exporting plain text to log files. `lcov` enabled HTML viewer functionality.
+`expect` lets the terminal print green/red colors while exporting plain text to log files. `lcov` enables HTML viewer functionality.
 
 You will also want to install the following for a better waveform viewing experience (optional, not a package managed solution so an enterprise environment may not approve):
 ```bash
@@ -233,7 +242,7 @@ And if you click `rtl` you get the detailed report:
 
 ![Coverage Report - Detailed](docs/img/lcov_code_covr_detail.png)
 
-Note: This report was generated earlier on in the project. Some required a more comphrehensive test bench, while others required exclusion pragmas (an unreachable default case, written to avoid latch inferrence, was a common culprit).
+Note: This report was generated earlier on in the project. Some required a more comprehensive test bench, while others required exclusion pragmas (an unreachable default case, written to avoid latch inferrence, was a common culprit).
 
 ![Example of Exclusion Pragma](docs/img/pragma_ex.png)
 

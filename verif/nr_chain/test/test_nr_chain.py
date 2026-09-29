@@ -11,6 +11,7 @@ from verif.nr_chain.env import NrChainEnv
 from verif.nr_chain.sequences import (
     DefaultLoopbackVSeq,
     MinPayloadLoopbackSeq,
+    MultiSymbolBlockLoopbackSeq,
     SeedSweepVSeq,
     StressVSeq,
     VaryingCpVSeq,
@@ -193,3 +194,30 @@ class ZeroCpLoopbackTest(NrChainBaseTest):
         vseq.mod_order = _MOD_ORDER
         vseq.count = 16
         await vseq.start(self.env.vseqr)
+
+
+@pyuvm.test()
+class MultiSymbolBlockTest(NrChainBaseTest):
+    """
+    Single transport block spanning 3 OFDM symbols (payload_len = 3*N_FFT).
+
+    Closes two coverage gaps left by every other test in this file
+    which use payload_len == N_FFT (one symbol per block):
+      - nr_tx_chain.sv: cp_inserter backpressure (sym_ready=0) while
+        tx_state==TX_IDLE.
+      - nr_rx_chain.sv: rx_cinit_load's short intra-block gap branch
+        (sym_gap_cnt <= CP_LEN_MAX, no reload).
+
+    drain_cycles=4000 (inherited) covers 3 symbols with margin; recompute
+    per NrChainBaseTest's formula if n_symbols grows much further.
+    """
+
+    async def body(self) -> None:
+        seq = MultiSymbolBlockLoopbackSeq("multi_symbol_block")
+        seq.n_fft = _N_FFT
+        seq.n_symbols = 3
+        seq.cp_len = 9
+        seq.scrambler_seed = 0x00_0001
+        seq.data_w = _DATA_W
+        seq.mod_order = _MOD_ORDER
+        await seq.start(self.env.tx_agent.sequencer)

@@ -278,3 +278,43 @@ class StressVSeq(NrChainVirtualSeqBase):
         multi_seq.mod_order = self.mod_order  # propagate
         multi_seq.count = self.multi_count
         await multi_seq.start(self.tx_seqr)
+
+
+class MultiSymbolBlockLoopbackSeq(uvm_sequence):
+    """
+    One transport block spanning multiple OFDM symbols
+    (payload_len = n_symbols * n_fft).
+
+    Every other sequence in this file uses payload_len == n_fft (exactly
+    one symbol per block), which leaves two branches  dead:
+
+      - nr_tx_chain.sv: s_axis_tready deasserted because sym_ready=0 while
+        tx_state==TX_IDLE. cp_inserter never has to finish EMITting symbol N
+        while more input bytes for the same block are still arriving.
+      - nr_rx_chain.sv: rx_cinit_load's short-gap ("hold, do not reload")
+        branch. Every gap ever observed was a long inter-block gap
+        (sym_gap_cnt > CP_LEN_MAX); the intra-block CP gap
+        (sym_gap_cnt <= CP_LEN_MAX) is never produced by a one-symbol block.
+
+    n_symbols=3 forces two FILL/EMIT cycles of backpressure on TX and two
+    short intra-block gaps on RX within a single transport block.
+    """
+
+    def __init__(self, name: str = "MultiSymbolBlockLoopbackSeq") -> None:
+        super().__init__(name)
+        self.n_fft: int = 64
+        self.n_symbols: int = 3
+        self.cp_len: int = 9
+        self.scrambler_seed: int = 0x00_0001
+        self.data_w: int = 8
+        self.mod_order: int = 8
+
+    async def body(self) -> None:
+        mask = (1 << self.mod_order) - 1
+        item = NrChainSeqItem()
+        item.payload = [random.randint(0, mask) for _ in range(self.n_fft * self.n_symbols)]
+        item.cp_len = self.cp_len
+        item.scrambler_seed = self.scrambler_seed
+        item.data_w = self.data_w
+        await self.start_item(item)
+        await self.finish_item(item)

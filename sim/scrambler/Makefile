@@ -1,7 +1,7 @@
 # sim/scrambler/Makefile
 DUT      := scrambler
 TOPLEVEL := scrambler
-COCOTB_TEST_MODULES := verif.scrambler.test_scrambler
+COCOTB_TEST_MODULES := verif.scrambler.test.test_scrambler
 
 include ../common.mk
 

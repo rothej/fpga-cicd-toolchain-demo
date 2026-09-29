@@ -142,3 +142,31 @@ class AllSixteenQamConstellationPointsTest(QamMapperBaseTest):
         seq.mod_order = 4
         seq.data_w = _DATA_W
         await seq.start(self.env.tx_agent.sequencer)
+
+
+@pyuvm.test()
+class AllSixtyFourQamConstellationPointsTest(QamMapperBaseTest):
+    """
+    All 64 constellation points of 64-QAM in a single packet.
+    Directly validates all 8 arms of qam64_val() — no statistical gaps.
+    """
+
+    async def body(self) -> None:
+        seq = AllConstellationPointsSeq("64qam_pts_seq")
+        seq.mod_order = 6
+        seq.data_w = _DATA_W
+        await seq.start(self.env.tx_agent.sequencer)
+
+
+@pyuvm.test()
+class AllTwoFiftySixQamConstellationPointsTest(QamMapperBaseTest):
+    """
+    All 256 constellation points of 256-QAM in a single packet.
+    Directly validates all 16 arms of qam256_val().
+    """
+
+    async def body(self) -> None:
+        seq = AllConstellationPointsSeq("256qam_pts_seq")
+        seq.mod_order = 8
+        seq.data_w = _DATA_W
+        await seq.start(self.env.tx_agent.sequencer)

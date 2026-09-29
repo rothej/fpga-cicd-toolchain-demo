@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import cocotb
 import pyuvm
+from cocotb.triggers import RisingEdge
 from pyuvm import ConfigDB
 
 from verif.common.base_test import BaseTest
@@ -52,6 +53,30 @@ class CrcEngineBaseTest(BaseTest):
 
     async def body(self) -> None:  # pragma: no cover
         raise NotImplementedError
+
+
+@pyuvm.test()
+class TestCrcInitPulse(CrcEngineBaseTest):
+    """
+    Explicitly pulses init before sending a known-vector payload.
+
+    crc_engine.sv auto-resets the LFSR when `last` fires, so every other
+    test in this regression drives back-to-back packets via AxisDriver
+    without ever asserting init - the `if (init) lfsr <= '0;` branch is
+    permanently dead as a result. This test drives init directly per the
+    protocol documented in the module header ("Assert init for one cycle
+    before the first data_valid beat") to close that gap.
+    """
+
+    async def body(self) -> None:
+        dut = self.dut
+
+        # init=1, data_valid=0 - hits the branch AxisDriver never reaches.
+        dut.init.value = 1
+        await RisingEdge(dut.clk)
+        dut.init.value = 0
+
+        await CrcKnownVectorSeq("init_pulse_seq").start(self.env.tx_agent.sequencer)
 
 
 @pyuvm.test()

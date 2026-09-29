@@ -1,7 +1,7 @@
 # sim/qam_demapper/Makefile
 DUT      := qam_demapper
 TOPLEVEL := qam_demapper
-COCOTB_TEST_MODULES := verif.qam_demapper.test_qam_demapper
+COCOTB_TEST_MODULES := verif.qam_demapper.test.test_qam_demapper
 
 include ../common.mk
 

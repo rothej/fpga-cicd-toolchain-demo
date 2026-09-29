@@ -72,7 +72,9 @@ module qam_mapper #(
             2'b01:   return 8'sd24;
             2'b11:   return -8'sd24;
             2'b10:   return -8'sd72;
+            // verilator coverage_off
             default: return 8'sd0;
+            // verilator coverage_on
         endcase
     endfunction : qam16_val
 
@@ -86,7 +88,9 @@ module qam_mapper #(
             3'b111:  return -8'sd36;
             3'b101:  return -8'sd60;
             3'b100:  return -8'sd84;
+            // verilator coverage_off
             default: return 8'sd0;
+            // verilator coverage_on
         endcase
     endfunction : qam64_val
 
@@ -108,7 +112,9 @@ module qam_mapper #(
             4'b1011: return -8'sd66;
             4'b1001: return -8'sd78;
             4'b1000: return -8'sd90;
+            // verilator coverage_off
             default: return 8'sd0;
+            // verilator coverage_on
         endcase
     endfunction : qam256_val
 
@@ -155,10 +161,12 @@ module qam_mapper #(
                         i_sym_r <= qam256_val(s_axis_tdata[7:4]);
                         q_sym_r <= qam256_val(s_axis_tdata[3:0]);
                     end
+                    // verilator coverage_off
                     default: begin
                         i_sym_r <= 8'sd0;
                         q_sym_r <= 8'sd0;
                     end
+                    // verilator coverage_on
                 endcase  // mod_order
             end
         end

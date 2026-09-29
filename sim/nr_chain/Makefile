@@ -7,14 +7,11 @@ THIS_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 DUT      := nr_chain_top
 TOPLEVEL := nr_chain_top
-COCOTB_TEST_MODULES := verif.nr_chain.test_nr_chain
+COCOTB_TEST_MODULES := verif.nr_chain.test.test_nr_chain
 
 include ../common.mk
 
 VERILOG_SOURCES := \
-    $(RTL_DIR)/crc_pkg.sv      \
-    $(RTL_DIR)/crc_engine.sv   \
-    $(RTL_DIR)/crc_checker.sv  \
     $(RTL_DIR)/scrambler.sv    \
     $(RTL_DIR)/qam_mapper.sv   \
     $(RTL_DIR)/qam_demapper.sv \

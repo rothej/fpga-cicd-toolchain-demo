@@ -1,7 +1,7 @@
 # sim/cp_inserter/Makefile
 DUT      := cp_inserter
 TOPLEVEL := cp_inserter
-COCOTB_TEST_MODULES := verif.cp_inserter.test_cp_inserter
+COCOTB_TEST_MODULES := verif.cp_inserter.test.test_cp_inserter
 
 include ../common.mk
 

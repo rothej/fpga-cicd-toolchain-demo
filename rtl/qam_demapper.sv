@@ -137,7 +137,9 @@ module qam_demapper #(
                     3'd4: m_axis_tdata <= DATA_W'({4'b0, demap_qam16(i_sym), demap_qam16(q_sym)});
                     3'd6: m_axis_tdata <= DATA_W'({2'b0, demap_qam64(i_sym), demap_qam64(q_sym)});
                     4'd8: m_axis_tdata <= DATA_W'({demap_qam256(i_sym), demap_qam256(q_sym)});
+                    // verilator coverage_off
                     default: m_axis_tdata <= '0;
+                    // verilator coverage_on
                 endcase  // mod_order
             end
         end

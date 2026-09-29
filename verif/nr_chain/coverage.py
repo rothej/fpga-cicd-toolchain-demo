@@ -115,3 +115,8 @@ class NrChainCoverageCollector(uvm_component):
                 "  Coverage gap: only one scrambler seed exercised - "
                 "add SeedSweepLoopbackTest to the regression"
             )
+        if self._block_count and self._lb_pkt_count <= self._block_count:
+            self.logger.warning(
+                "  Coverage gap: no multi-symbol transport blocks exercised - "
+                "every block used exactly one OFDM symbol (payload_len == N_FFT)"
+            )

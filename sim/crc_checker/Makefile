@@ -1,7 +1,7 @@
 # sim/crc_checker/Makefile
 DUT      := crc_checker
 TOPLEVEL := crc_checker
-COCOTB_TEST_MODULES := verif.crc_checker.test_crc_checker
+COCOTB_TEST_MODULES := verif.crc_checker.test.test_crc_checker
 
 include ../common.mk
 
