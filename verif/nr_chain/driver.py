@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cocotb.triggers import RisingEdge
+from cocotb.triggers import First, RisingEdge, Timer
 from pyuvm import ConfigDB, uvm_analysis_port, uvm_driver
 
 from verif.common.config_utils import _cfg
@@ -81,8 +81,15 @@ class NrChainDriver(uvm_driver):
         and the seed is safe to change for the next block.
         """
         dut = self.dut
+        timeout_ns = 50_000  # tuned to pipeline depth
+        deadline = Timer(timeout_ns, unit="ns")
         while True:
-            await RisingEdge(dut.clk)
+            trigger = await First(RisingEdge(dut.clk), deadline)
+            if trigger is deadline:
+                raise RuntimeError(
+                    f"[NrChainDriver] m_axis_tlast not seen within {timeout_ns} ns — "
+                    f"RX chain appears stuck"
+                )
             if (
                 int(dut.m_axis_tvalid.value)
                 and int(dut.m_axis_tready.value)

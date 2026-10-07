@@ -20,6 +20,7 @@ Optional ConfigDB keys (defaults in parentheses):
     "ready_sig"  : str  ("tready")  - backpressure ready signal name
     "has_ready"  : bool (True)      - False for source-only interfaces
     "is_active"  : bool (True)      - False = monitor-only (RX-side) agent
+    "user_sig"   : str  (None)      - tuser signal name; omit if interface has no tuser
 """
 
 from __future__ import annotations
@@ -60,12 +61,15 @@ class AxisTransaction(uvm_sequence_item):
               each element is 0-255; for wider buses the range scales with
               the port width.
         last: True when the final beat was accompanied by tlast asserted.
+        user: Integer flag; set to 1 if any beat in the burst had tuser=1.
+              Always 0 on TX (driver writes txn.user to the wire, not vice versa).
     """
 
     def __init__(self, name: str = "AxisTransaction") -> None:
         super().__init__(name)
         self.data: list[int] = []
         self.last: bool = True
+        self.user: int = 0
 
     def __repr__(self) -> str:
         return f"AxisTransaction(data={self.data!r}, last={self.last!r})"
@@ -73,7 +77,7 @@ class AxisTransaction(uvm_sequence_item):
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, AxisTransaction):
             return NotImplemented
-        return self.data == other.data and self.last == other.last
+        return self.data == other.data and self.last == other.last and self.user == other.user
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +117,8 @@ class AxisDriver(uvm_driver):
         self.has_ready: bool = _cfg(self, "has_ready", True)
         self._ready = getattr(dut, _cfg(self, "ready_sig", "tready")) if self.has_ready else None
 
+        user_sig_name = _cfg(self, "user_sig", None)
+        self._user = getattr(dut, user_sig_name) if user_sig_name else None
         # De-assert valid at startup so the DUT sees a clean idle bus.
         self._valid.value = 0
         self._last.value = 0
@@ -132,6 +138,8 @@ class AxisDriver(uvm_driver):
             self._data.value = beat
             self._valid.value = 1
             self._last.value = int(is_last)
+            if self._user is not None:
+                self._user.value = txn.user
 
             # Advance on rising edge; hold the beat while ready is low.
             while True:
@@ -170,6 +178,9 @@ class AxisMonitor(uvm_component):
         self.has_ready: bool = _cfg(self, "has_ready", True)
         self._ready = getattr(dut, _cfg(self, "ready_sig", "tready")) if self.has_ready else None
 
+        user_sig_name = _cfg(self, "user_sig", None)
+        self._user = getattr(dut, user_sig_name) if user_sig_name else None
+
     def _beat_active(self) -> bool:
         """True when a valid handshake is present on the current clock edge."""
         valid = int(self._valid.value) == 1
@@ -189,17 +200,20 @@ class AxisMonitor(uvm_component):
 
             beats: list[int] = []
             last = False
+            user_seen = False
 
             while not last:
                 beats.append(int(self._data.value))
                 last = int(self._last.value) == 1
+                if self._user is not None and int(self._user.value) == 1:
+                    user_seen = True
                 if not last:
-                    # Advance to the next active beat; idle cycles are skipped.
                     await self._wait_for_beat()
 
             txn = AxisTransaction()
             txn.data = beats
             txn.last = True
+            txn.user = int(user_seen)
             self.ap.write(txn)
 
 

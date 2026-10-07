@@ -46,6 +46,7 @@ module cp_remover #(
     input  logic [SAMP_W-1:0] s_axis_tdata,
     input  logic              s_axis_tvalid,
     input  logic              s_axis_tlast,   // informational; counted internally
+    input  logic              s_axis_tuser,
     output logic              s_axis_tready,
 
     // Runtime CP length - must be stable for the duration of one burst.
@@ -55,6 +56,7 @@ module cp_remover #(
     output logic [SAMP_W-1:0] m_axis_tdata,
     output logic              m_axis_tvalid,
     output logic              m_axis_tlast,
+    output logic              m_axis_tuser,
     input  logic              m_axis_tready
 );
 
@@ -89,11 +91,13 @@ module cp_remover #(
         m_axis_tdata  = '0;
         m_axis_tvalid = 1'b0;
         m_axis_tlast  = 1'b0;
+        m_axis_tuser  = 1'b0;
 
         if (state == PASS && s_axis_tvalid) begin
             m_axis_tdata  = s_axis_tdata;
             m_axis_tvalid = 1'b1;
-            m_axis_tlast  = (cnt == CNT_W'(N_FFT - 1));
+            m_axis_tlast  = (cnt == CNT_W'(N_FFT - 1)) && s_axis_tlast;
+            m_axis_tuser  = s_axis_tuser;
         end
     end
 

@@ -64,6 +64,7 @@ module nr_rx_chain #(
     output logic              s_axis_tready,
     input  logic [SAMP_W-1:0] s_axis_tdata,
     input  logic              s_axis_tlast,
+    input  logic              s_axis_tuser,
 
     // Sideband configuration - must match TX path values
     input logic [$clog2(CP_LEN_MAX+1)-1:0] cp_len,
@@ -93,6 +94,7 @@ module nr_rx_chain #(
     logic              sym_valid;
     logic              sym_last;
     logic              sym_ready;
+    logic              sym_tuser;
 
     cp_remover #(
         .N_FFT     (N_FFT),
@@ -104,11 +106,13 @@ module nr_rx_chain #(
         .s_axis_tdata (s_axis_tdata),
         .s_axis_tvalid(s_axis_tvalid),
         .s_axis_tlast (s_axis_tlast),
+        .s_axis_tuser (s_axis_tuser),
         .s_axis_tready(s_axis_tready),
         .cp_len       (cp_len),
         .m_axis_tdata (i_q_sym),
         .m_axis_tvalid(sym_valid),
         .m_axis_tlast (sym_last),
+        .m_axis_tuser (sym_tuser),
         .m_axis_tready(sym_ready)
     );
 
@@ -118,32 +122,23 @@ module nr_rx_chain #(
     /*
      * Descrambler seed detection
      *
-     * A 6-bit saturating counter measures the idle gap between sym_valid
-     * pulses. When sym_valid re-asserts after a gap > CP_LEN_MAX cycles the
-     * chain has received the first symbol of a new transport block; cinit_load
-     * is pulsed for one cycle so the descrambler reloads with scrambler_seed
-     * before the first demapped byte arrives (one cycle later from
-     * qam_demapper's registered output).
+     * sym_tuser rides from nr_tx_chain's block-start tag through
+     * cp_remover. It is never asserted during the CP-copy region (the
+     * tag always lands at cp_inserter buffer index 0 on the TX side - see
+     * cp_inserter.sv). rx_cinit_load fires the same cycle cp_remover emits
+     * the tagged sample - one cycle before qam_demapper's registered
+     * output (and therefore the descrambler input) presents it, matching
+     * the cinit-before-data convention used by nr_tx_chain's tx_cinit_load.
+     *
+     * Replaces a prior idle-gap heuristic (sym_gap_cnt > CP_LEN_MAX) that
+     * assumed every intra-block symbol boundary produced a gap no larger
+     * than CP_LEN_MAX cycles. cp_inserter's FILL phase actually stalls the
+     * whole upstream pipeline for ~N_FFT cycles between symbols, so for
+     * N_FFT > CP_LEN_MAX every intra-block boundary looked like a new
+     * transport block and reseeded the descrambler mid-block.
      */
-    logic       sym_valid_prev;
-    logic [5:0] sym_gap_cnt;  // saturates at 63; compared against CP_LEN_MAX
-    logic       rx_cinit_load;
-
-    assign rx_cinit_load = sym_valid && !sym_valid_prev && (sym_gap_cnt > 6'(CP_LEN_MAX));
-
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            sym_valid_prev <= 1'b0;
-            sym_gap_cnt    <= '1;   // start saturated -> first TB triggers cinit_load
-        end else begin
-            sym_valid_prev <= sym_valid;
-            if (sym_valid) begin
-                sym_gap_cnt <= '0;
-            end else if (sym_gap_cnt != '1) begin
-                sym_gap_cnt <= sym_gap_cnt + 1'b1;
-            end
-        end
-    end
+    logic rx_cinit_load;
+    assign rx_cinit_load = sym_valid && sym_tuser;
 
 
     /*
@@ -164,10 +159,12 @@ module nr_rx_chain #(
         .s_axis_tdata (i_q_sym),
         .s_axis_tvalid(sym_valid),
         .s_axis_tlast (sym_last),
-        .s_axis_tready(),               // always ready; not connected upstream
+        .s_axis_tuser (sym_tuser),
+        .s_axis_tready(),
         .m_axis_tdata (demap_data),
         .m_axis_tvalid(demap_valid),
         .m_axis_tlast (demap_last),
+        .m_axis_tuser (),
         .m_axis_tready(1'b1)
     );
 

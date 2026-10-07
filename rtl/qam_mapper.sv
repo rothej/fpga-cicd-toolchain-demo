@@ -42,10 +42,12 @@ module qam_mapper #(
     input  logic [DATA_W-1:0] s_axis_tdata,
     input  logic              s_axis_tvalid,
     input  logic              s_axis_tlast,
+    input  logic              s_axis_tuser,
     output logic              s_axis_tready,
     output logic [2*IQ_W-1:0] m_axis_tdata,
     output logic              m_axis_tvalid,
     output logic              m_axis_tlast,
+    output logic              m_axis_tuser,
     input  logic              m_axis_tready
 );
 
@@ -136,13 +138,16 @@ module qam_mapper #(
             q_sym_r       <= '0;
             m_axis_tvalid <= 1'b0;
             m_axis_tlast  <= 1'b0;
+            m_axis_tuser  <= 1'b0;
         end else begin
-            m_axis_tvalid <= 1'b0;  // default: de-assert every cycle
+            m_axis_tvalid <= 1'b0;
             m_axis_tlast  <= 1'b0;
+            m_axis_tuser  <= 1'b0;
 
             if (s_axis_tvalid) begin
                 m_axis_tvalid <= 1'b1;
                 m_axis_tlast  <= s_axis_tlast;
+                m_axis_tuser  <= s_axis_tuser;
 
                 case (mod_order)
                     3'd2: begin

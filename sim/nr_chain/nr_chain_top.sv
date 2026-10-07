@@ -52,6 +52,7 @@ module nr_chain_top #(
     input  logic              m_axis_tready,
     output logic [DATA_W-1:0] m_axis_tdata,
     output logic              m_axis_tlast,
+    output logic              lb_tuser,
     output logic              crc_ok
 );
 
@@ -71,11 +72,13 @@ module nr_chain_top #(
     wire              lb_tready_w;
     wire [SAMP_W-1:0] lb_tdata_w;
     wire              lb_tlast_w;
+    wire              lb_tuser_w;
 
     assign lb_tvalid = lb_tvalid_w;
     assign lb_tready = lb_tready_w;
     assign lb_tdata  = lb_tdata_w;
     assign lb_tlast  = lb_tlast_w;
+    assign lb_tuser  = lb_tuser_w;
 
 
     nr_tx_chain #(
@@ -97,6 +100,7 @@ module nr_chain_top #(
         .m_axis_tvalid (lb_tvalid_w),
         .m_axis_tready (lb_tready_w),
         .m_axis_tdata  (lb_tdata_w),
+        .m_axis_tuser  (lb_tuser_w),
         .m_axis_tlast  (lb_tlast_w)
     );
 
@@ -114,6 +118,7 @@ module nr_chain_top #(
         .s_axis_tvalid (lb_tvalid_w),
         .s_axis_tready (lb_tready_w),
         .s_axis_tdata  (lb_tdata_w),
+        .s_axis_tuser  (lb_tuser_w),
         .s_axis_tlast  (lb_tlast_w),
         .cp_len        (cp_len),
         .scrambler_seed(scrambler_seed),

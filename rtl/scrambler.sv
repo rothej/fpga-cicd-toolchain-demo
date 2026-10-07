@@ -16,7 +16,7 @@
  * Gold sequence generators:
  *   x1[n+31] = x1[n+3]  ^ x1[n]
  *   x2[n+31] = x2[n+3]  ^ x2[n+2] ^ x2[n+1] ^ x2[n]
- *   c[n]     = x1[n] ^ x2[n]
+ *   c[n]     = x1[n]    ^ x2[n]
  *
  * Eight bits of the Gold sequence are consumed per clock cycle so one byte
  * of scrambled output is produced per s_axis_tvalid beat. The output is
@@ -45,10 +45,12 @@ module scrambler #(
     input  logic [DATA_W-1:0] s_axis_tdata,
     input  logic              s_axis_tvalid,
     input  logic              s_axis_tlast,
+    input  logic              s_axis_tuser,
     output logic              s_axis_tready,
     output logic [DATA_W-1:0] m_axis_tdata,
     output logic              m_axis_tvalid,
     output logic              m_axis_tlast,
+    output logic              m_axis_tuser,
     input  logic              m_axis_tready
 );
 
@@ -135,9 +137,11 @@ module scrambler #(
             m_axis_tdata  <= '0;
             m_axis_tvalid <= 1'b0;
             m_axis_tlast  <= 1'b0;
+            m_axis_tuser  <= 1'b0;
         end else begin
             m_axis_tvalid <= 1'b0;  // default: de-assert every cycle
             m_axis_tlast  <= 1'b0;
+            m_axis_tuser  <= 1'b0;
 
             if (cinit_load) begin
                 x1 <= X1_INIT;
@@ -146,6 +150,7 @@ module scrambler #(
                 m_axis_tdata  <= s_axis_tdata ^ DATA_W'(gold_byte);
                 m_axis_tvalid <= 1'b1;
                 m_axis_tlast  <= s_axis_tlast;
+                m_axis_tuser  <= s_axis_tuser;
                 x1            <= next_x1_state(x1);
                 x2            <= next_x2_state(x2);
             end

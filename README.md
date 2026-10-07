@@ -13,7 +13,7 @@ The DUT is a parameterizable 5G NR physical-layer chain implemented across multi
 ### First Time
 Install:
 ```
-sudo apt install direnv expect lcov
+sudo apt install -y direnv expect lcov gtkwave
 ```
 
 Run:
@@ -65,32 +65,11 @@ fpga-cicd-toolchain-demo/
 │ │ ├── base_test.py        # Base test class
 │ │ ├── nr_ref_model.py     # Golden reference model
 │ │ └── tests/              # Pure-Python pytest unit tests (no simulator)
-│ ├── crc_engine/
-│ │ └── test/               # @pyuvm.test() entry points
-│ ├── crc_checker/
-│ │ └── test/
-│ ├── scrambler/
-│ │ └── test/
-│ ├── qam_mapper/
-│ │ └── test/
-│ ├── qam_demapper/
-│ │ └── test/
-│ ├── cp_inserter/
-│ │ └── test/
-│ ├── cp_remover/
-│ │ └── test/
-│ └── nr_chain/             # Integration TB (virtual sequencer)
-│   └── test/
+│ └── <module>/             # One folder per RTL module
+│   └── test/               # @pyuvm.test() entry points
 ├── sim/                    # Per-module Makefiles
 │ ├── common.mk             # Shared Verilator/cocotb config
-│ ├── crc_engine/
-│ ├── crc_checker/
-│ ├── scrambler/
-│ ├── qam_mapper/
-│ ├── qam_demapper/
-│ ├── cp_inserter/
-│ ├── cp_remover/
-│ └── nr_chain/
+│ └── <module>/             # Per-module Makefiles
 ├── scripts/
 │ ├── setup.sh              # Top-level setup entrypoint
 │ ├── setup_tools.sh        # Handles EDA tool installation
@@ -107,13 +86,13 @@ fpga-cicd-toolchain-demo/
 
 ### Required
 
-| Tool | Version | Purpose |
-|---|---|---|
-| Python | 3.12+ | cocotb testbenches and pyuvm |
-| Verilator | 5.040 (built from source) | SystemVerilog simulation backend |
-| Verible | Latest release | SV formatting and linting |
-| direnv | Any | Automatic venv activation per-directory |
-| gtkwave | >= 3.3 | Waveform visualization |
+| Tool      | Version                   | Purpose                                 |
+|-----------|---------------------------|-----------------------------------------|
+| Python    | 3.12+                     | cocotb testbenches and pyuvm            |
+| Verilator | 5.040 (built from source) | SystemVerilog simulation backend        |
+| Verible   | Latest release            | SV formatting and linting               |
+| direnv    | Any                       | Automatic venv activation per-directory |
+| gtkwave   | >= 3.3                    | Waveform visualization                  |
 
 > Verilator and Verible are installed into `.tools/` by `scripts/setup.sh` - no system-wide installation required. This is good practice as different repos and projects may use a different set of dependencies/versions.
 
@@ -184,20 +163,20 @@ export PATH="$PWD/.tools/verilator/bin:$PWD/.tools/verible/bin:$PATH"
 
 Run `make help` to print all targets. All make commands output logs into the `logs/` folder.
 
-| Target | Description |
-|---|---|
-| `make setup` | First-time bootstrap (after `direnv allow`) |
-| `make sim` | Run all unit TBs + nr_chain integration TB |
-| `make unit-sim` | Run all unit TBs via cocotb/Verilator |
-| `make integration-sim` | Run nr_chain loopback TB |
-| `make sim-<module>` | Run a single unit TB e.g. `make sim-crc_engine` |
-| `make test` | pytest verif/common/tests/ (no simulator) |
-| `make waves MODULE=<m>` | Run sim with FST dump + open GTKWave |
-| `make lint` | Run all pre-commit hooks against all files |
-| `make format` | Auto-format SV files (Verible) and Python files (ruff) |
-| `make clean` | Remove all build, sim, and cache artifacts |
-| `make clean-sim` | Remove only simulation artifacts (`sim_build/`, `*.fst`, `*.vcd`) |
-| `make clean-tools` | Remove installed tools (`.tools/`) |
+| Target                  | Description |
+|-------------------------|-------------------------------------------------------------------|
+| `make setup`            | First-time bootstrap (after `direnv allow`)                       |
+| `make sim`              | Run all unit TBs + nr_chain integration TB                        |
+| `make unit-sim`         | Run all unit TBs via cocotb/Verilator                             |
+| `make integration-sim`  | Run nr_chain loopback TB                                          |
+| `make sim-<module>`     | Run a single unit TB e.g. `make sim-crc_engine`                   |
+| `make test`             | pytest verif/common/tests/ (no simulator)                         |
+| `make waves MODULE=<m>` | Run sim with FST dump + open GTKWave                              |
+| `make lint`             | Run all pre-commit hooks against all files                        |
+| `make format`           | Auto-format SV files (Verible) and Python files (ruff)            |
+| `make clean`            | Remove all build, sim, and cache artifacts                        |
+| `make clean-sim`        | Remove only simulation artifacts (`sim_build/`, `*.fst`, `*.vcd`) |
+| `make clean-tools`      | Remove installed tools (`.tools/`)                                |
 
 ## Running the Simulation
 
@@ -279,14 +258,14 @@ make lint
 
 If a hook auto-fixes a file (e.g. trailing whitespace, formatting), the commit will be aborted. `git add` the fixed files and commit again.
 
-| Hook | Tool | Scope |
-|---|---|---|
-| Trailing whitespace, EOF, YAML, TOML, merge conflicts, line endings | pre-commit-hooks | All files |
-| Python linting and import sorting | ruff-check (--fix) | `*.py` |
-| Python formatting | ruff-format | `*.py` |
-| Static type checking | mypy | `verif/` |
-| SV auto-formatting | verible-verilog-format | `*.sv`, `*.v` |
-| SV linting | verible-verilog-lint | `*.sv`, `*.v` |
+| Hook                                                                | Tool                   | Scope         |
+|---------------------------------------------------------------------|------------------------|---------------|
+| Trailing whitespace, EOF, YAML, TOML, merge conflicts, line endings | pre-commit-hooks       | All files     |
+| Python linting and import sorting                                   | ruff-check (--fix)     | `*.py`        |
+| Python formatting                                                   | ruff-format            | `*.py`        |
+| Static type checking                                                | mypy                   | `verif/`      |
+| SV auto-formatting                                                  | verible-verilog-format | `*.sv`, `*.v` |
+| SV linting                                                          | verible-verilog-lint   | `*.sv`, `*.v` |
 
 ## License
 

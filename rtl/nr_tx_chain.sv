@@ -82,7 +82,8 @@ module nr_tx_chain #(
     output logic              m_axis_tvalid,
     input  logic              m_axis_tready,
     output logic [SAMP_W-1:0] m_axis_tdata,
-    output logic              m_axis_tlast
+    output logic              m_axis_tlast,
+    output logic              m_axis_tuser
 );
 
     localparam int unsigned IQ_W = SAMP_W / 2;  // per-component width
@@ -133,6 +134,31 @@ module nr_tx_chain #(
     // s_axis_tready: propagate cp_inserter backpressure AND hold low in CINIT.
     assign s_axis_tready = sym_ready && (tx_state == TX_IDLE);
 
+    /*
+     * Block-start tag
+     *
+     * tx_cinit_load fires the cycle before byte 0 of a new block is
+     * accepted (tready is still 0 that cycle). block_start_pending latches
+     * that event and clears on the cycle byte 0 is actually accepted,
+     * producing a single-cycle tag aligned with the first accepted
+     * s_axis_tdata beat of each block. This rides through scrambler ->
+     * qam_mapper -> cp_inserter as tuser so nr_rx_chain can detect block
+     * starts directly instead of inferring them from idle-gap timing.
+     */
+    logic block_start_pending;
+    logic tx_tuser;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            block_start_pending <= 1'b0;
+        end else if (tx_cinit_load) begin
+            block_start_pending <= 1'b1;
+        end else if (s_axis_tvalid && s_axis_tready) begin
+            block_start_pending <= 1'b0;
+        end
+    end
+
+    assign tx_tuser = block_start_pending && s_axis_tvalid && s_axis_tready;
 
     /*
      * scrambler -> qam_mapper connection
@@ -141,7 +167,9 @@ module nr_tx_chain #(
     logic [DATA_W-1:0] scr_data;
     logic              scr_valid;
     logic              scr_last;
+    logic              sym_tuser;
     logic              scr_ready;
+    logic              scr_tuser;
 
     scrambler #(
         .DATA_W(DATA_W)
@@ -150,16 +178,15 @@ module nr_tx_chain #(
         .rst_n        (rst_n),
         .cinit_load   (tx_cinit_load),
         .cinit        (scrambler_seed[30:0]),
-        // Gate tvalid with s_axis_tready: LFSR advances only when data is
-        // consumed by the pipeline. Without this gate the LFSR runs ahead
-        // during cp_inserter EMIT stalls, desynchronising TX and RX.
         .s_axis_tdata (s_axis_tdata),
         .s_axis_tvalid(s_axis_tvalid && s_axis_tready),
         .s_axis_tlast (s_axis_tlast),
-        .s_axis_tready(),                                // always 1 internally; not routed up
+        .s_axis_tuser (tx_tuser),
+        .s_axis_tready(),
         .m_axis_tdata (scr_data),
         .m_axis_tvalid(scr_valid),
         .m_axis_tlast (scr_last),
+        .m_axis_tuser (scr_tuser),
         .m_axis_tready(scr_ready)
     );
 
@@ -182,10 +209,12 @@ module nr_tx_chain #(
         .s_axis_tdata (scr_data),
         .s_axis_tvalid(scr_valid),
         .s_axis_tlast (scr_last),
+        .s_axis_tuser (scr_tuser),
         .s_axis_tready(scr_ready),
         .m_axis_tdata (sym_data),
         .m_axis_tvalid(sym_valid),
         .m_axis_tlast (sym_last),
+        .m_axis_tuser (sym_tuser),
         .m_axis_tready(sym_ready)
     );
 
@@ -206,12 +235,13 @@ module nr_tx_chain #(
         .rst_n        (rst_n),
         .s_axis_tdata (sym_data),
         .s_axis_tvalid(sym_valid),
-        .s_axis_tlast (sym_last),
+        .s_axis_tuser (sym_tuser),
         .s_axis_tready(sym_ready),
         .cp_len       (cp_len),
         .m_axis_tdata (m_axis_tdata),
         .m_axis_tvalid(m_axis_tvalid),
         .m_axis_tlast (m_axis_tlast),
+        .m_axis_tuser (m_axis_tuser),
         .m_axis_tready(m_axis_tready)
     );
 
