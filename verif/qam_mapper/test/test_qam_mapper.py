@@ -28,10 +28,9 @@ class QamMapperBaseTest(BaseTest):
 
     def build_phase(self) -> None:
         ConfigDB().set(None, "*", "dut", cocotb.top)
-        super().build_phase()
-        ConfigDB().set(self, "*", "drain_cycles", 32)
-        # iq_w consumed by QamMapperOutputMonitor (a component).
+        ConfigDB().set(None, "*", "drain_cycles", 32)
         ConfigDB().set(self, "*", "iq_w", _IQ_W)
+        super().build_phase()
         self.env = QamMapperEnv.create("env", self)
 
     async def pre_body(self) -> None:

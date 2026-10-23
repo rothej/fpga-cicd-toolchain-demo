@@ -22,5 +22,5 @@ def _cfg(component, key, default=None):
     """
     try:
         return ConfigDB().get(component, "", key)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return default

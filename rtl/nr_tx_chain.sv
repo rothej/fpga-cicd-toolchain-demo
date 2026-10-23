@@ -235,6 +235,7 @@ module nr_tx_chain #(
         .rst_n        (rst_n),
         .s_axis_tdata (sym_data),
         .s_axis_tvalid(sym_valid),
+        .s_axis_tlast (sym_last),
         .s_axis_tuser (sym_tuser),
         .s_axis_tready(sym_ready),
         .cp_len       (cp_len),

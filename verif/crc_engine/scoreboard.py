@@ -13,7 +13,7 @@ Reference: crc_compute(tx.data, crc_poly, crc_width) must equal rx.crc_value.
 
 from __future__ import annotations
 
-from pyuvm import uvm_scoreboard, uvm_tlm_analysis_fifo
+from pyuvm import uvm_component, uvm_tlm_analysis_fifo
 
 from verif.common.axis_agent import AxisTransaction
 from verif.common.config_utils import _cfg
@@ -23,7 +23,7 @@ from verif.crc_engine.monitors import CrcResultTransaction
 __all__ = ["CrcScoreboard"]
 
 
-class CrcScoreboard(uvm_scoreboard):
+class CrcScoreboard(uvm_component):
     """
     Compares the DUT CRC output against the crc_compute() reference model.
 
@@ -67,6 +67,9 @@ class CrcScoreboard(uvm_scoreboard):
 
     def check_phase(self) -> None:
         total = self.pass_count + self.fail_count
+        if total == 0:
+            self.logger.critical("Scoreboard: no transactions checked")
+            raise AssertionError("Scoreboard: no transactions were checked")
         if self.fail_count:
             self.logger.critical(f"Scoreboard: {self.fail_count}/{total} transactions FAILED.")
             raise AssertionError(f"CRC scoreboard: {self.fail_count} transaction(s) failed.")

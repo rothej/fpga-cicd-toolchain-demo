@@ -64,6 +64,9 @@ class QamMapperScoreboard(uvm_component):
 
     def check_phase(self) -> None:
         self.logger.info(f"Scoreboard: {self._passed} passed, {self._failed} failed")
+        if self._passed + self._failed == 0:
+            self.logger.critical("Scoreboard: no transactions checked")
+            raise AssertionError("Scoreboard: no transactions were checked")
         if self._failed:
             self.logger.critical(f"{self._failed} scoreboard mismatch(es)")
             raise AssertionError(f"{self._failed} scoreboard mismatch(es)")

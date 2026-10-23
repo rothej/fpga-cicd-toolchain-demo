@@ -23,8 +23,8 @@ class CrcCheckerBaseTest(BaseTest):
 
     def build_phase(self) -> None:
         ConfigDB().set(None, "*", "dut", cocotb.top)
+        ConfigDB().set(None, "*", "drain_cycles", 32)
         super().build_phase()
-        ConfigDB().set(self, "*", "drain_cycles", 32)
         self.env = CrcCheckerEnv.create("env", self)
 
     async def pre_body(self) -> None:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cocotb.triggers import First, RisingEdge, Timer
+from cocotb.triggers import RisingEdge
 from pyuvm import ConfigDB, uvm_analysis_port, uvm_driver
 
 from verif.common.config_utils import _cfg
@@ -62,9 +62,11 @@ class NrChainDriver(uvm_driver):
             dut.s_axis_tdata.value = byte_val & mask
             dut.s_axis_tvalid.value = 1
             dut.s_axis_tlast.value = int(idx == last)
-            await RisingEdge(dut.clk)
-            while not dut.s_axis_tready.value:
+            while True:
+                tready_before = int(dut.s_axis_tready.value)
                 await RisingEdge(dut.clk)
+                if tready_before:
+                    break
 
         dut.s_axis_tvalid.value = 0
         dut.s_axis_tlast.value = 0
@@ -73,26 +75,21 @@ class NrChainDriver(uvm_driver):
         """
         Block until m_axis_tlast pulses at the RX output.
 
-        scrambler_seed must not change until this point: the RX chain's
-        rx_cinit_load detection fires when the first PASS sample exits
-        cp_remover, which is cp_len + N_FFT + pipeline_latency cycles
-        after the last TX byte was accepted - well after _drive() returns.
-        Waiting for m_axis_tlast guarantees the descrambler has finished
-        and the seed is safe to change for the next block.
+        Uses a per-cycle poll to avoid
+        cocotb 2.0 First/Timer cancellation bugs that cause phantom
+        50 000-ns timeouts and silently kill the driver task.
         """
         dut = self.dut
-        timeout_ns = 50_000  # tuned to pipeline depth
-        deadline = Timer(timeout_ns, unit="ns")
-        while True:
-            trigger = await First(RisingEdge(dut.clk), deadline)
-            if trigger is deadline:
-                raise RuntimeError(
-                    f"[NrChainDriver] m_axis_tlast not seen within {timeout_ns} ns — "
-                    f"RX chain appears stuck"
-                )
+        max_cycles = 100_000
+        for _ in range(max_cycles):
+            await RisingEdge(dut.clk)
             if (
                 int(dut.m_axis_tvalid.value)
                 and int(dut.m_axis_tready.value)
                 and int(dut.m_axis_tlast.value)
             ):
-                break
+                return
+        raise RuntimeError(
+            "[NrChainDriver] m_axis_tlast not seen within "
+            f"{max_cycles} cycles — RX chain appears stuck"
+        )

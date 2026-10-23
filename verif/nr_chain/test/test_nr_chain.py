@@ -10,8 +10,8 @@ from verif.common.base_test import BaseTest
 from verif.nr_chain.env import NrChainEnv
 from verif.nr_chain.sequences import (
     DefaultLoopbackVSeq,
-    MinPayloadLoopbackSeq,
-    MultiSymbolBlockLoopbackSeq,
+    MinPayloadVSeq,
+    MultiSymbolBlockVSeq,
     SeedSweepVSeq,
     StressVSeq,
     VaryingCpVSeq,
@@ -46,15 +46,10 @@ class NrChainBaseTest(BaseTest):
 
     def build_phase(self) -> None:
         ConfigDB().set(None, "*", "dut", cocotb.top)
-        # drain_cycles MUST be set before super().build_phase() because
-        # BaseTest.build_phase() reads it via _cfg(). Setting it afterward
-        # has no effect — the field is already assigned to the default (0).
         ConfigDB().set(self, "*", "drain_cycles", 4000)
-        super().build_phase()
-        # samp_w consumed by NrChainLoopbackMonitor (a component).
         ConfigDB().set(self, "*", "samp_w", _SAMP_W)
-        # data_w consumed by NrChainDriver and NrChainOutputMonitor (components).
         ConfigDB().set(self, "*", "data_w", _DATA_W)
+        super().build_phase()
         self.env = NrChainEnv.create("env", self)
 
     async def pre_body(self) -> None:
@@ -132,13 +127,13 @@ class MinPayloadTest(NrChainBaseTest):
     """
 
     async def body(self) -> None:
-        seq = MinPayloadLoopbackSeq("min_payload")
-        seq.n_fft = _N_FFT
-        seq.cp_len = 9
-        seq.scrambler_seed = 0x00_0001
-        seq.data_w = _DATA_W
-        seq.mod_order = _MOD_ORDER
-        await seq.start(self.env.tx_agent.sequencer)
+        vseq = MinPayloadVSeq("min_payload_v")
+        vseq.n_fft = _N_FFT
+        vseq.cp_len = 9
+        vseq.scrambler_seed = 0x00_0001
+        vseq.data_w = _DATA_W
+        vseq.mod_order = _MOD_ORDER
+        await vseq.start(self.env.vseqr)
 
 
 @pyuvm.test()
@@ -213,11 +208,11 @@ class MultiSymbolBlockTest(NrChainBaseTest):
     """
 
     async def body(self) -> None:
-        seq = MultiSymbolBlockLoopbackSeq("multi_symbol_block")
-        seq.n_fft = _N_FFT
-        seq.n_symbols = 3
-        seq.cp_len = 9
-        seq.scrambler_seed = 0x00_0001
-        seq.data_w = _DATA_W
-        seq.mod_order = _MOD_ORDER
-        await seq.start(self.env.tx_agent.sequencer)
+        vseq = MultiSymbolBlockVSeq("multi_symbol_v")
+        vseq.n_fft = _N_FFT
+        vseq.n_symbols = 3
+        vseq.cp_len = 9
+        vseq.scrambler_seed = 0x00_0001
+        vseq.data_w = _DATA_W
+        vseq.mod_order = _MOD_ORDER
+        await vseq.start(self.env.vseqr)

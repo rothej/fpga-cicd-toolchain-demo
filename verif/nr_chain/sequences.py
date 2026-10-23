@@ -318,3 +318,47 @@ class MultiSymbolBlockLoopbackSeq(uvm_sequence):
         item.data_w = self.data_w
         await self.start_item(item)
         await self.finish_item(item)
+
+
+class MinPayloadVSeq(NrChainVirtualSeqBase):
+    """Virtual sequence wrapper for MinPayloadLoopbackSeq."""
+
+    def __init__(self, name: str = "MinPayloadVSeq") -> None:
+        super().__init__(name)
+        self.n_fft: int = 64
+        self.cp_len: int = 9
+        self.scrambler_seed: int = 0x00_0001
+        self.data_w: int = 8
+        self.mod_order: int = 8
+
+    async def body(self) -> None:
+        seq = MinPayloadLoopbackSeq("min_payload_inner")
+        seq.n_fft = self.n_fft
+        seq.cp_len = self.cp_len
+        seq.scrambler_seed = self.scrambler_seed
+        seq.data_w = self.data_w
+        seq.mod_order = self.mod_order
+        await seq.start(self.tx_seqr)
+
+
+class MultiSymbolBlockVSeq(NrChainVirtualSeqBase):
+    """Virtual sequence wrapper for MultiSymbolBlockLoopbackSeq."""
+
+    def __init__(self, name: str = "MultiSymbolBlockVSeq") -> None:
+        super().__init__(name)
+        self.n_fft: int = 64
+        self.n_symbols: int = 3
+        self.cp_len: int = 9
+        self.scrambler_seed: int = 0x00_0001
+        self.data_w: int = 8
+        self.mod_order: int = 8
+
+    async def body(self) -> None:
+        seq = MultiSymbolBlockLoopbackSeq("multi_sym_inner")
+        seq.n_fft = self.n_fft
+        seq.n_symbols = self.n_symbols
+        seq.cp_len = self.cp_len
+        seq.scrambler_seed = self.scrambler_seed
+        seq.data_w = self.data_w
+        seq.mod_order = self.mod_order
+        await seq.start(self.tx_seqr)

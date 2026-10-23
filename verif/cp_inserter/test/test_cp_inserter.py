@@ -36,10 +36,9 @@ class CpInserterBaseTest(BaseTest):
 
     def build_phase(self) -> None:
         ConfigDB().set(None, "*", "dut", cocotb.top)
-        super().build_phase()
-        ConfigDB().set(self, "*", "drain_cycles", 128)
-        # samp_w consumed by CpInserterDriver and CpInserterOutputMonitor.
+        ConfigDB().set(None, "*", "drain_cycles", 128)
         ConfigDB().set(self, "*", "samp_w", _SAMP_W)
+        super().build_phase()
         self.env = CpInserterEnv.create("env", self)
 
     async def pre_body(self) -> None:

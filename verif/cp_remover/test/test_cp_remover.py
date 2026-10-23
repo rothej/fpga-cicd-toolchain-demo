@@ -38,11 +38,9 @@ class CpRemoverBaseTest(BaseTest):
 
     def build_phase(self) -> None:
         ConfigDB().set(None, "*", "dut", cocotb.top)
-        super().build_phase()
-        # drain_cycles consumed by BaseTest (a component) - keep here.
-        ConfigDB().set(self, "*", "drain_cycles", 32)
-        # samp_w consumed by CpRemoverDriver and CpRemoverOutputMonitor - keep here.
+        ConfigDB().set(None, "*", "drain_cycles", 32)
         ConfigDB().set(self, "*", "samp_w", _SAMP_W)
+        super().build_phase()
         self.env = CpRemoverEnv.create("env", self)
 
     async def pre_body(self) -> None:

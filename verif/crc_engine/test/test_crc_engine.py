@@ -36,11 +36,10 @@ class CrcEngineBaseTest(BaseTest):
 
     def build_phase(self) -> None:
         ConfigDB().set(None, "*", "dut", cocotb.top)
-        super().build_phase()
-        ConfigDB().set(self, "*", "drain_cycles", 32)
-        # crc_poly and crc_width consumed by CrcScoreboard (a component).
+        ConfigDB().set(None, "*", "drain_cycles", 32)
         ConfigDB().set(self, "*", "crc_poly", _CRC_POLY)
         ConfigDB().set(self, "*", "crc_width", _CRC_WIDTH)
+        super().build_phase()
         self.env = CrcEngineEnv.create("env", self)
 
     async def pre_body(self) -> None:
