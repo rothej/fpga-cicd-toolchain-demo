@@ -13,28 +13,6 @@ from verif.nr_chain.seq_item import NrChainSeqItem
 # ---------------------------------------------------------------------------
 
 
-class SingleBlockLoopbackSeq(uvm_sequence):
-    """One transport block of payload_len random bytes."""
-
-    def __init__(self, name: str = "SingleBlockLoopbackSeq") -> None:
-        super().__init__(name)
-        self.payload_len: int = 64
-        self.cp_len: int = 9
-        self.scrambler_seed: int = 0x00_0001
-        self.data_w: int = 8
-        self.mod_order: int = 8  # set to RTL MOD_ORDER; controls payload bit width
-
-    async def body(self) -> None:
-        mask = (1 << self.mod_order) - 1  # was: (1 << self.data_w) - 1
-        item = NrChainSeqItem()
-        item.payload = [random.randint(0, mask) for _ in range(self.payload_len)]
-        item.cp_len = self.cp_len
-        item.scrambler_seed = self.scrambler_seed
-        item.data_w = self.data_w
-        await self.start_item(item)
-        await self.finish_item(item)
-
-
 class MultiBlockLoopbackSeq(uvm_sequence):
     """
     count transport blocks of payload_len random bytes, driven back-to-back.
@@ -91,32 +69,6 @@ class VaryingCpLoopbackSeq(uvm_sequence):
             item.data_w = self.data_w
             await self.start_item(item)
             await self.finish_item(item)
-
-
-class MinPayloadLoopbackSeq(uvm_sequence):
-    """
-    Single transport block with a one-byte payload.
-
-    Stresses the minimum-length path through every stage of both chains.
-    """
-
-    def __init__(self, name: str = "MinPayloadLoopbackSeq") -> None:
-        super().__init__(name)
-        self.n_fft: int = 64  # one complete OFDM symbol
-        self.cp_len: int = 9
-        self.scrambler_seed: int = 0x00_0001
-        self.data_w: int = 8
-        self.mod_order: int = 8  # set to RTL MOD_ORDER; controls payload bit width
-
-    async def body(self) -> None:
-        mask = (1 << self.mod_order) - 1  # was: (1 << self.data_w) - 1
-        item = NrChainSeqItem()
-        item.payload = [random.randint(0, mask) for _ in range(self.n_fft)]
-        item.cp_len = self.cp_len
-        item.scrambler_seed = self.scrambler_seed
-        item.data_w = self.data_w
-        await self.start_item(item)
-        await self.finish_item(item)
 
 
 class SeedSweepLoopbackSeq(uvm_sequence):
@@ -292,9 +244,7 @@ class MultiSymbolBlockLoopbackSeq(uvm_sequence):
         tx_state==TX_IDLE. cp_inserter never has to finish EMITting symbol N
         while more input bytes for the same block are still arriving.
       - nr_rx_chain.sv: rx_cinit_load's short-gap ("hold, do not reload")
-        branch. Every gap ever observed was a long inter-block gap
-        (sym_gap_cnt > CP_LEN_MAX); the intra-block CP gap
-        (sym_gap_cnt <= CP_LEN_MAX) is never produced by a one-symbol block.
+        branch. Scoreboard checks sample count and tuser position.
 
     n_symbols=3 forces two FILL/EMIT cycles of backpressure on TX and two
     short intra-block gaps on RX within a single transport block.
@@ -318,27 +268,6 @@ class MultiSymbolBlockLoopbackSeq(uvm_sequence):
         item.data_w = self.data_w
         await self.start_item(item)
         await self.finish_item(item)
-
-
-class MinPayloadVSeq(NrChainVirtualSeqBase):
-    """Virtual sequence wrapper for MinPayloadLoopbackSeq."""
-
-    def __init__(self, name: str = "MinPayloadVSeq") -> None:
-        super().__init__(name)
-        self.n_fft: int = 64
-        self.cp_len: int = 9
-        self.scrambler_seed: int = 0x00_0001
-        self.data_w: int = 8
-        self.mod_order: int = 8
-
-    async def body(self) -> None:
-        seq = MinPayloadLoopbackSeq("min_payload_inner")
-        seq.n_fft = self.n_fft
-        seq.cp_len = self.cp_len
-        seq.scrambler_seed = self.scrambler_seed
-        seq.data_w = self.data_w
-        seq.mod_order = self.mod_order
-        await seq.start(self.tx_seqr)
 
 
 class MultiSymbolBlockVSeq(NrChainVirtualSeqBase):

@@ -33,14 +33,16 @@ class NrChainBaseTest(BaseTest):
         SAMP_W     = 16  - sample word width at TX/RX boundary
         MOD_ORDER  = 2   - bits per QAM symbol (2=QPSK)
         DATA_W     = 8   - data bus width in bits
-        POLY_W     = 24  - CRC polynomial width (3-byte CRC-24A)
+
+    ConfigDB: n_fft is set here so the driver, scoreboard and coverage
+    collector all use the same value as the compile-time N_FFT.
 
     drain_cycles=4000:
-        Covers the full TX+RX pipeline for up to 32 back-to-back blocks at
-        N_FFT=64 / QPSK. Recalculate if N_FFT or count is increased:
-            drain ≈ count × ceil((payload_len + POLY_W/8) × 8
-                                 / (N_FFT × MOD_ORDER))
-                          × (N_FFT + CP_LEN_MAX) × 2
+        NrChainDriver blocks on m_axis_tlast for every block, so every
+        block has already left the RX chain when body() returns. The drain
+        only gives the monitors and scoreboard time to settle, and 4000
+        cycles is deliberately generous. It does not need to scale with
+        block count or N_FFT.
     """
 
     def build_phase(self) -> None:
@@ -48,6 +50,7 @@ class NrChainBaseTest(BaseTest):
         ConfigDB().set(self, "*", "drain_cycles", 4000)
         ConfigDB().set(self, "*", "samp_w", _SAMP_W)
         ConfigDB().set(self, "*", "data_w", _DATA_W)
+        ConfigDB().set(self, "*", "n_fft", _N_FFT)
         super().build_phase()
         self.env = NrChainEnv.create("env", self)
 
@@ -86,8 +89,9 @@ class DefaultLoopbackTest(NrChainBaseTest):
 class VaryingCpTest(NrChainBaseTest):
     """
     Five blocks with cp_len in [0, 4, 8, 12, 16].
-    TX cp_inserter and RX cp_remover receive the same cp_len sideband -
-    any mismatch between the two produces a CRC failure, not a length error.
+    TX cp_inserter and RX cp_remover receive the same cp_len sideband.
+    A TX-side bug shows up as a wrong loopback sample count or tuser index;
+    an RX-side bug (e.g. wrong discard count) shows up as a payload mismatch.
     """
 
     async def body(self) -> None:
@@ -105,7 +109,8 @@ class SeedSweepTest(NrChainBaseTest):
     """
     Four scrambler seeds, identical 64-byte payload each time.
     All four recovered payloads must equal the original.
-    Isolates scrambler seed-loading from CRC and QAM logic.
+    Isolates scrambler seed-loading (TX cinit_load and the RX tuser-triggered
+    reseed) from CP handling, which stays fixed at cp_len=9.
     """
 
     async def body(self) -> None:

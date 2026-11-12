@@ -10,13 +10,11 @@ class NrChainSeqItem(uvm_sequence_item):
     Transport block for the nr_chain loopback testbench.
 
     payload        - raw data bytes driven into nr_tx_chain before CRC
-                     attachment; the TX chain appends POLY_W/8 CRC bytes
-                     internally before scrambling and modulation
+                     attachment
     cp_len         - cyclic prefix length in samples; presented on the cp_len
                      sideband and must match between TX insert and RX remove
     scrambler_seed - 32-bit LFSR seed; shared between TX scrambler and RX
-                     descrambler - mismatch produces a CRC failure, not a
-                     misalignment failure
+                     descrambler - mismatch shows as payload corruption
     data_w         - DATA_W RTL parameter; determines tdata byte width mask
     """
 

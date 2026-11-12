@@ -67,7 +67,7 @@
 module nr_tx_chain #(
     parameter int N_FFT      = 128,
     parameter int CP_LEN_MAX = 16,
-    parameter int SAMP_W     = 16,   // total I+Q width at output (2 × IQ_W)
+    parameter int SAMP_W     = 16,   // total I+Q width at output (2 * IQ_W)
     parameter int MOD_ORDER  = 2,    // bits per QAM symbol (compile-time)
     parameter int DATA_W     = 8
 ) (

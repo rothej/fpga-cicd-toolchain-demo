@@ -32,18 +32,11 @@
  *   that the scoreboard comparison (rx.data == tx.payload) is well-defined.
  *
  * Descrambler seeding:
- *   cinit_load is fired at the start of each transport block, detected by a
- *   rising edge on cp_remover's m_axis_tvalid after a gap longer than
- *   CP_LEN_MAX cycles. This distinguishes a new transport block (long idle
- *   between blocks) from the inter-symbol CP gap within a block (short idle).
- *   A 6-bit saturating counter measures the idle gap; cinit_load fires when
- *   the counter exceeds CP_LEN_MAX on the rising edge of cp_remover output.
- *
- * crc_ok:
- *   Asserted whenever m_axis_tvalid is high. For this demo integration the
- *   end-to-end data-path correctness is the primary check (rx.data == tx.payload
- *   in the scoreboard). CRC computation is validated independently by the
- *   crc_engine / crc_checker unit testbenches.
+ *   cinit_load fires on the cp_remover output beat carrying the TX block-start
+ *   tag (sym_tuser). nr_tx_chain tags byte 0 of each transport block; the tag
+ *   rides through scrambler -> qam_mapper -> cp_inserter -> cp_remover and is
+ *   never asserted in the CP region. This replaced an idle-gap heuristic that
+ *   misfired on intra-block symbol boundaries whenever N_FFT > CP_LEN_MAX.
  */
 
 `timescale 1ns / 1ps
