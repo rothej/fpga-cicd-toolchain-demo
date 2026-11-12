@@ -1,6 +1,7 @@
 # Makefile
 
 SHELL  := /bin/bash
+.SHELLFLAGS := -o pipefail -c
 PYTHON := python3
 
 UNIT_MODULES :=  \

@@ -53,8 +53,7 @@ module nr_rx_chain #(
     parameter int CP_LEN_MAX = 16,
     parameter int SAMP_W     = 16,
     parameter int MOD_ORDER  = 2,
-    parameter int DATA_W     = 8,
-    parameter int POLY_W     = 24    // accepted for interface compatibility; unused here
+    parameter int DATA_W     = 8
 ) (
     input logic clk,
     input logic rst_n,
@@ -74,9 +73,7 @@ module nr_rx_chain #(
     output logic              m_axis_tvalid,
     input  logic              m_axis_tready,
     output logic [DATA_W-1:0] m_axis_tdata,
-    output logic              m_axis_tlast,
-
-    output logic crc_ok
+    output logic              m_axis_tlast
 );
 
     localparam int unsigned IQ_W = SAMP_W / 2;
@@ -197,15 +194,5 @@ module nr_rx_chain #(
     // Discard Gold-sequence artefacts in the upper (DATA_W - MOD_ORDER) bits.
     // The qam_demapper zero-pads those bits; after XOR they equal gold[DATA_W-1:MOD_ORDER].
     assign m_axis_tdata = descr_tdata & MOD_MASK;
-
-
-    /*
-     * crc_ok
-     *
-     * Asserted whenever the descrambler is producing valid output.
-     * End-to-end correctness is verified by the scoreboard (rx.data == tx.payload).
-     * CRC computation is unit-tested independently via crc_engine / crc_checker TBs.
-     */
-    assign crc_ok = m_axis_tvalid;
 
 endmodule : nr_rx_chain

@@ -30,6 +30,7 @@ class NrChainDriver(uvm_driver):
         self.ap = uvm_analysis_port("ap", self)
         self.dut = ConfigDB().get(self, "", "dut")
         self.data_w = _cfg(self, "data_w", 8)
+        self.n_fft = _cfg(self, "n_fft", 64)
 
     async def run_phase(self) -> None:
         dut = self.dut
@@ -41,11 +42,20 @@ class NrChainDriver(uvm_driver):
 
         while True:
             item: NrChainSeqItem = await self.seq_item_port.get_next_item()
+            self._check_whole_symbols(item)
             await self._set_sideband(item)
             await self._drive(item)
             await self._wait_for_rx_output()  # hold seed until block exits RX chain
             self.seq_item_port.item_done()
             self.ap.write(item)
+
+    def _check_whole_symbols(self, item: NrChainSeqItem) -> None:
+        if not item.payload or len(item.payload) % self.n_fft:
+            raise ValueError(
+                f"{item}: payload_len must be a non-zero multiple of N_FFT={self.n_fft}. "
+                "nr_tx_chain neither pads nor carries a length, so a short block would be "
+                "emitted as a full symbol containing stale samples."
+            )
 
     async def _set_sideband(self, item: NrChainSeqItem) -> None:
         """Present cp_len and scrambler_seed one setup cycle before tvalid."""
@@ -63,9 +73,8 @@ class NrChainDriver(uvm_driver):
             dut.s_axis_tvalid.value = 1
             dut.s_axis_tlast.value = int(idx == last)
             while True:
-                tready_before = int(dut.s_axis_tready.value)
                 await RisingEdge(dut.clk)
-                if tready_before:
+                if int(dut.s_axis_tready.value):
                     break
 
         dut.s_axis_tvalid.value = 0

@@ -40,6 +40,7 @@ class NrChainEnv(uvm_env):
 
         # Loopback point analysis (coverage only)
         self.lb_mon.ap.connect(self.coverage.lb_export)
+        self.lb_mon.ap.connect(self.scoreboard.lb_export)
 
         # Wire virtual sequencer -> concrete TX sequencer
         self.vseqr.tx_sequencer = self.tx_agent.sequencer

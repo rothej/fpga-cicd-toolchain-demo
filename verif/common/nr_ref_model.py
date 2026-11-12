@@ -16,7 +16,6 @@ Implemented:
     qam_demap      - hard-decision nearest-neighbour demapper
     cp_insert      - cyclic prefix insertion
     cp_remove      - cyclic prefix removal
-    nr_loopback_check - end-to-end loopback correctness invariant
 """
 
 from __future__ import annotations
@@ -34,7 +33,6 @@ __all__ = [
     "qam_demap",
     "cp_insert",
     "cp_remove",
-    "nr_loopback_check",
 ]
 
 
@@ -460,30 +458,3 @@ def cp_remove(full_samples: list[int], cp_len: int) -> list[int]:
     if cp_len == 0:
         return list(full_samples)
     return list(full_samples[cp_len:])
-
-
-# ---------------------------------------------------------------------------
-# End-to-end loopback check
-# ---------------------------------------------------------------------------
-
-
-def nr_loopback_check(
-    payload_in: list[int],
-    payload_out: list[int],
-    crc_ok: bool,
-) -> bool:
-    """
-    End-to-end loopback correctness invariant for an error-free channel.
-
-    For an ideal TX->RX chain (no quantisation error, no channel noise):
-        payload_out == payload_in  AND  crc_ok == True
-
-    Args:
-        payload_in:  original bytes driven into nr_tx_chain
-        payload_out: bytes recovered from nr_rx_chain output
-        crc_ok:      DUT's CRC check result sampled at m_axis_tlast
-
-    Returns:
-        True iff both the content and CRC status invariants hold.
-    """
-    return crc_ok and (payload_out == payload_in)

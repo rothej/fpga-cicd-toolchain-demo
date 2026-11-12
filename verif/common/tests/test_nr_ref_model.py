@@ -18,7 +18,6 @@ from verif.common.nr_ref_model import (
     cp_insert,
     cp_remove,
     crc_compute,
-    nr_loopback_check,
     qam_demap,
     qam_map,
     scramble,
@@ -257,33 +256,3 @@ class TestCpRoundtrip:
         random.seed(0xC0DE)
         samples = [random.randint(0, 0xFFFF) for _ in range(64)]
         assert cp_remove(cp_insert(samples, cp_len), cp_len) == samples
-
-
-# ---------------------------------------------------------------------------
-# nr_loopback_check
-# ---------------------------------------------------------------------------
-
-
-class TestNrLoopbackCheck:
-    def test_pass_when_data_matches_and_crc_ok(self) -> None:
-        data = [1, 2, 3]
-        assert nr_loopback_check(data, data, crc_ok=True) is True
-
-    def test_fail_when_crc_bad(self) -> None:
-        data = [1, 2, 3]
-        assert nr_loopback_check(data, data, crc_ok=False) is False
-
-    def test_fail_when_data_differs(self) -> None:
-        assert nr_loopback_check([1, 2, 3], [1, 2, 4], crc_ok=True) is False
-
-    def test_fail_when_both_wrong(self) -> None:
-        assert nr_loopback_check([1, 2], [3, 4], crc_ok=False) is False
-
-    def test_fail_when_length_mismatch(self) -> None:
-        assert nr_loopback_check([1, 2, 3], [1, 2], crc_ok=True) is False
-
-    def test_empty_payload_passes(self) -> None:
-        assert nr_loopback_check([], [], crc_ok=True) is True
-
-    def test_empty_payload_fails_on_bad_crc(self) -> None:
-        assert nr_loopback_check([], [], crc_ok=False) is False

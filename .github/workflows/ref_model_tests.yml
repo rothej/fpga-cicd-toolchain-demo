@@ -1,0 +1,30 @@
+# .github/workflows/ref_model_tests.yml
+name: Ref Model Tests
+
+on:
+  workflow_call:
+
+jobs:
+  pytest:
+    name: pytest (reference model)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install expect
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends expect
+
+      - name: Install Python dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run reference-model tests
+        run: make test

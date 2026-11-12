@@ -9,29 +9,36 @@ from verif.common.config_utils import _cfg
 
 
 class NrChainOutputItem:
-    """
-    One recovered transport block from the RX chain output.
+    """One recovered transport block from the RX chain output."""
 
-    data   - recovered bytes (expected to equal the original payload)
-    crc_ok - DUT's CRC check result, sampled at the tlast beat
-    """
-
-    def __init__(self, data: list[int], crc_ok: bool) -> None:
+    def __init__(self, data: list[int]) -> None:
         self.data = data
-        self.crc_ok = crc_ok
 
     def __repr__(self) -> str:
-        return f"NrChainOutputItem(len={len(self.data)}, crc_ok={self.crc_ok})"
+        return f"NrChainOutputItem(len={len(self.data)})"
 
 
 class NrChainLoopbackItem:
-    """One OFDM symbol packet observed at the TX->RX boundary."""
+    """
+    One transport block's worth of OFDM samples observed at the TX->RX boundary.
 
-    def __init__(self, samples: list[int]) -> None:
+    tlast only marks the end of a block (not of each symbol), so a multi-symbol
+    block arrives as a single item of n_symbols * (N_FFT + cp_len) samples.
+
+    user_idx - indices into samples where lb_tuser was high (block-start tag)
+    """
+
+    def __init__(self, samples: list[int], user_idx: list[int]) -> None:
         self.samples = samples
+        self.user_idx = user_idx
+
+    def n_symbols(self, n_fft: int, cp_len: int) -> int | None:
+        """Whole OFDM symbols in this block, or None if the length isn't a multiple."""
+        q, r = divmod(len(self.samples), n_fft + cp_len)
+        return q if r == 0 else None
 
     def __repr__(self) -> str:
-        return f"NrChainLoopbackItem(n_samples={len(self.samples)})"
+        return f"NrChainLoopbackItem(n_samples={len(self.samples)}, user_idx={self.user_idx})"
 
 
 class NrChainOutputMonitor(uvm_component):
@@ -39,7 +46,7 @@ class NrChainOutputMonitor(uvm_component):
     Passive AXI4-S slave monitor on nr_chain_top's byte-level RX output.
 
     Holds m_axis_tready=1 continuously (no TB-side backpressure).
-    Collects DATA_W-bit bytes per accepted beat; samples crc_ok at tlast;
+    Collects DATA_W-bit bytes per accepted beat;
     publishes one NrChainOutputItem per tlast-terminated transport block.
     """
 
@@ -55,15 +62,13 @@ class NrChainOutputMonitor(uvm_component):
 
         while True:
             data: list[int] = []
-            crc_ok = False
             while True:
                 await RisingEdge(dut.clk)
                 if dut.m_axis_tvalid.value and dut.m_axis_tready.value:
                     data.append(int(dut.m_axis_tdata.value) & mask)
                     if dut.m_axis_tlast.value:
-                        crc_ok = bool(dut.crc_ok.value)
                         break
-            self.ap.write(NrChainOutputItem(data, crc_ok))
+            self.ap.write(NrChainOutputItem(data))
 
 
 class NrChainLoopbackMonitor(uvm_component):
@@ -86,10 +91,13 @@ class NrChainLoopbackMonitor(uvm_component):
 
         while True:
             samples: list[int] = []
+            user_idx: list[int] = []
             while True:
                 await RisingEdge(dut.clk)
                 if dut.lb_tvalid.value and dut.lb_tready.value:
+                    if dut.lb_tuser.value:
+                        user_idx.append(len(samples))
                     samples.append(int(dut.lb_tdata.value) & mask)
                     if dut.lb_tlast.value:
                         break
-            self.ap.write(NrChainLoopbackItem(samples))
+            self.ap.write(NrChainLoopbackItem(samples, user_idx))

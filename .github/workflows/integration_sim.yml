@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Verilator runtime dependencies
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfl2 zlib1g
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfl2 zlib1g expect
 
       - name: Cache Verilator
         id: cache-verilator
@@ -45,7 +45,7 @@ jobs:
           cache: pip
 
       - name: Install Verilator runtime dependencies
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfl2 zlib1g
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfl2 zlib1g expect
 
       - name: Restore Verilator cache
         uses: actions/cache/restore@v4

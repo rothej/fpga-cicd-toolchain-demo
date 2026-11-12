@@ -10,7 +10,6 @@ from verif.common.base_test import BaseTest
 from verif.nr_chain.env import NrChainEnv
 from verif.nr_chain.sequences import (
     DefaultLoopbackVSeq,
-    MinPayloadVSeq,
     MultiSymbolBlockVSeq,
     SeedSweepVSeq,
     StressVSeq,
@@ -120,19 +119,24 @@ class SeedSweepTest(NrChainBaseTest):
 
 
 @pyuvm.test()
-class MinPayloadTest(NrChainBaseTest):
+class SingleBlockTest(NrChainBaseTest):
     """
-    Single one-byte transport block.
-    Stresses the minimum-length path through every stage of both chains.
+    One N_FFT-byte block (one OFDM symbol) after reset.
+
+    N_FFT bytes is the smallest block the chain supports: nr_tx_chain neither
+    pads nor carries a length, so payload_len must be a non-zero multiple of
+    N_FFT (enforced in NrChainDriver). Targets the first-block-after-reset
+    path: TX_CINIT armed by reset, RX cp_len latched from idle.
     """
 
     async def body(self) -> None:
-        vseq = MinPayloadVSeq("min_payload_v")
-        vseq.n_fft = _N_FFT
+        vseq = DefaultLoopbackVSeq("single_block_v")
+        vseq.payload_len = _N_FFT
         vseq.cp_len = 9
         vseq.scrambler_seed = 0x00_0001
         vseq.data_w = _DATA_W
         vseq.mod_order = _MOD_ORDER
+        vseq.count = 1
         await vseq.start(self.env.vseqr)
 
 
@@ -194,17 +198,10 @@ class ZeroCpLoopbackTest(NrChainBaseTest):
 @pyuvm.test()
 class MultiSymbolBlockTest(NrChainBaseTest):
     """
-    Single transport block spanning 3 OFDM symbols (payload_len = 3*N_FFT).
-
-    Closes two coverage gaps left by every other test in this file
-    which use payload_len == N_FFT (one symbol per block):
-      - nr_tx_chain.sv: cp_inserter backpressure (sym_ready=0) while
-        tx_state==TX_IDLE.
-      - nr_rx_chain.sv: rx_cinit_load's short intra-block gap branch
-        (sym_gap_cnt <= CP_LEN_MAX, no reload).
-
-    drain_cycles=4000 (inherited) covers 3 symbols with margin; recompute
-    per NrChainBaseTest's formula if n_symbols grows much further.
+    Three OFDM symbols in one block. Scoreboard asserts 3*(N_FFT+cp_len)
+    loopback samples and a single block-start tuser at index cp_len;
+    exercises cp_inserter backpressure with TX_IDLE active and the RX
+    tuser-based (not gap-based) reseed.
     """
 
     async def body(self) -> None:

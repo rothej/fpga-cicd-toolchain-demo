@@ -26,13 +26,11 @@ VERILOG_SOURCES := \
 # SAMP_W=16:     sample word width at the TX->RX loopback boundary
 # MOD_ORDER=2:   2=QPSK  (run separate Makefile targets for 4=16QAM, 6=64QAM)
 # DATA_W=8:      data bus byte width
-# POLY_W=24:     CRC-24A polynomial width (3 CRC bytes appended by TX chain)
 COMPILE_ARGS += \
     -GN_FFT=64      \
     -GCP_LEN_MAX=16 \
     -GSAMP_W=16     \
     -GMOD_ORDER=2   \
-    -GDATA_W=8      \
-    -GPOLY_W=24
+    -GDATA_W=8
 
 include $(shell cocotb-config --makefiles)/Makefile.sim

@@ -101,5 +101,6 @@ Desktop.ini
 Misc
 #############################################################################
 copy_files.sh
+debug_copy.sh
 combined_files.txt
 logs/

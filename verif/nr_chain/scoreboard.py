@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pyuvm import uvm_component, uvm_tlm_analysis_fifo
 
-from verif.common.nr_ref_model import nr_loopback_check
-from verif.nr_chain.monitors import NrChainOutputItem
+from verif.common.config_utils import _cfg
+from verif.nr_chain.monitors import NrChainLoopbackItem, NrChainOutputItem
 from verif.nr_chain.seq_item import NrChainSeqItem
 
 
@@ -13,23 +13,29 @@ class NrChainScoreboard(uvm_component):
     """
     End-to-end scoreboard for the nr_chain loopback testbench.
 
-    TX FIFO: NrChainSeqItem     from driver.ap       (original payload bytes)
-    RX FIFO: NrChainOutputItem  from output monitor  (recovered bytes + crc_ok)
+    TX FIFO: NrChainSeqItem        from driver.ap       (original payload)
+    RX FIFO: NrChainOutputItem     from output monitor  (recovered bytes)
+    LB FIFO: NrChainLoopbackItem   from loopback monitor (OFDM samples + tuser)
 
-    Loopback invariant: rx.data == tx.payload AND rx.crc_ok == True.
+    Per block, two independent checks:
+      1. Payload: rx.data == tx.payload (length first, then first bad byte).
+      2. Framing at the TX->RX boundary:
+           - sample count == (payload_len / N_FFT) * (N_FFT + cp_len)
+           - block-start tuser fires exactly once, at sample index cp_len
+         These catch symbol-count and CP-length errors that a payload-only
+         comparison can mask.
 
-    Failure modes (reported in priority order):
-      1. CRC failure     - scrambler seed mismatch / QAM demap error / CRC poly bug
-      2. Length mismatch - CRC byte stripping wrong, or tlast framing error
-      3. Payload mismatch - byte-level difference when length matches; first error
-                            index localises the fault to a specific pipeline stage
+    ConfigDB keys: "n_fft" (default 64).
     """
 
     def build_phase(self) -> None:
         self.tx_fifo = uvm_tlm_analysis_fifo("tx_fifo", self)
         self.rx_fifo = uvm_tlm_analysis_fifo("rx_fifo", self)
+        self.lb_fifo = uvm_tlm_analysis_fifo("lb_fifo", self)
         self.tx_export = self.tx_fifo.analysis_export
         self.rx_export = self.rx_fifo.analysis_export
+        self.lb_export = self.lb_fifo.analysis_export
+        self.n_fft: int = _cfg(self, "n_fft", 64)
         self._passed = 0
         self._failed = 0
 
@@ -40,50 +46,47 @@ class NrChainScoreboard(uvm_component):
         while True:
             tx: NrChainSeqItem = await self.tx_fifo.get()
             rx: NrChainOutputItem = await self.rx_fifo.get()
+            lb: NrChainLoopbackItem = await self.lb_fifo.get()
 
-            failed = False
-
-            if not rx.crc_ok:
-                failed = True
-                self.logger.error(
-                    f"CRC FAIL {tx}: crc_ok=0 "
-                    f"- check scrambler_seed match, CRC polynomial, "
-                    f"and QAM demap rounding"
-                )
-
-            if len(rx.data) != len(tx.payload):
-                failed = True
-                delta = len(rx.data) - len(tx.payload)
-                self.logger.error(
-                    f"Length mismatch {tx}: "
-                    f"expected {len(tx.payload)} bytes got {len(rx.data)} "
-                    f"({'extra' if delta > 0 else 'missing'} {abs(delta)} byte(s)) "
-                    f"- check CRC stripping count (POLY_W/8) and tlast framing"
-                )
-            elif rx.data != tx.payload:
-                failed = True
-                errs = [
-                    (i, tx.payload[i], rx.data[i])
-                    for i in range(len(tx.payload))
-                    if tx.payload[i] != rx.data[i]
-                ]
-                i0, exp0, got0 = errs[0]
-                self.logger.error(
-                    f"Payload mismatch {tx}: {len(errs)} byte(s) wrong - "
-                    f"first at byte[{i0}] exp=0x{exp0:02x} got=0x{got0:02x}"
-                )
-
-            # Final guard: catches any future refactor that removes
-            # one of the individual checks above.
-            if not failed and not nr_loopback_check(tx.payload, rx.data, rx.crc_ok):
-                failed = True
-                self.logger.error(f"Loopback invariant failed {tx}")
-
-            if failed:
+            errors = self._check_payload(tx, rx) + self._check_framing(tx, lb)
+            if errors:
                 self._failed += 1
+                for msg in errors:
+                    self.logger.error(f"{tx}: {msg}")
             else:
                 self._passed += 1
                 self.logger.debug(f"PASS {tx}")
+
+    def _check_payload(self, tx: NrChainSeqItem, rx: NrChainOutputItem) -> list[str]:
+        if len(rx.data) != len(tx.payload):
+            delta = len(rx.data) - len(tx.payload)
+            return [
+                f"length mismatch: expected {len(tx.payload)} bytes, got {len(rx.data)} "
+                f"({'extra' if delta > 0 else 'missing'} {abs(delta)})"
+            ]
+        errs = [
+            (i, e, g) for i, (e, g) in enumerate(zip(tx.payload, rx.data, strict=True)) if e != g
+        ]
+        if errs:
+            i0, e0, g0 = errs[0]
+            return [f"{len(errs)} byte(s) wrong, first at byte[{i0}] exp=0x{e0:02x} got=0x{g0:02x}"]
+        return []
+
+    def _check_framing(self, tx: NrChainSeqItem, lb: NrChainLoopbackItem) -> list[str]:
+        errors: list[str] = []
+        exp_syms = len(tx.payload) // self.n_fft
+        if lb.n_symbols(self.n_fft, tx.cp_len) != exp_syms:
+            errors.append(
+                f"loopback carried {len(lb.samples)} samples, expected {exp_syms} symbol(s) x "
+                f"(N_FFT {self.n_fft} + cp_len {tx.cp_len}) = "
+                f"{exp_syms * (self.n_fft + tx.cp_len)}"
+            )
+        if lb.user_idx != [tx.cp_len]:
+            errors.append(
+                f"block-start tuser at sample index {lb.user_idx}, expected exactly "
+                f"[{tx.cp_len}] (first payload sample of the first symbol)"
+            )
+        return errors
 
     def check_phase(self) -> None:
         self.logger.info(f"Scoreboard: {self._passed} passed, {self._failed} failed")

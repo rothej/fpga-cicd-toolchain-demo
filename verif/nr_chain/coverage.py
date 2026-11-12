@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import cocotb
 from pyuvm import uvm_component, uvm_tlm_analysis_fifo
 
+from verif.common.config_utils import _cfg
 from verif.nr_chain.monitors import NrChainLoopbackItem, NrChainOutputItem
 from verif.nr_chain.seq_item import NrChainSeqItem
 
@@ -38,10 +38,10 @@ class NrChainCoverageCollector(uvm_component):
         cp_len_bins      - four coarse CP length buckets (tx)
         payload_len_bins - four coarse payload size buckets (tx)
         seed_vals        - distinct scrambler seeds exercised
-        crc_pass / fail  - CRC outcome counts
-        lb_pkt_count     - total OFDM symbol packets observed at the loopback
-                           point; _lb_pkt_count / _block_count ≈ OFDM symbols
-                           per transport block (stable for fixed payload+MOD_ORDER)
+        syms_per_block   - histogram of OFDM symbols per transport block, derived
+                           from loopback sample count / (N_FFT + cp_len)
+
+    ConfigDB keys: "n_fft" (default 64).
     """
 
     def build_phase(self) -> None:
@@ -51,55 +51,47 @@ class NrChainCoverageCollector(uvm_component):
         self.tx_export = self.tx_fifo.analysis_export
         self.rx_export = self.rx_fifo.analysis_export
         self.lb_export = self.lb_fifo.analysis_export
+        self.n_fft: int = _cfg(self, "n_fft", 64)
 
         self._cp_bin_hits: dict[str, int] = {label: 0 for label, *_ in _CP_BINS}
         self._pl_bin_hits: dict[str, int] = {label: 0 for label, *_ in _PL_BINS}
         self._seed_vals: set[int] = set()
-        self._crc_pass: int = 0
-        self._crc_fail: int = 0
-        self._lb_pkt_count: int = 0
+        self._syms_per_block: dict[int, int] = {}
+        self._bad_framing: int = 0
         self._block_count: int = 0
-
-    async def _consume_lb(self) -> None:
-        """Background consumer: count OFDM packets at the loopback boundary."""
-        while True:
-            _: NrChainLoopbackItem = await self.lb_fifo.get()
-            self._lb_pkt_count += 1
 
     async def run_phase(self) -> None:
         # _reset_per_test_
         self._cp_bin_hits = {label: 0 for label, *_ in _CP_BINS}
         self._pl_bin_hits = {label: 0 for label, *_ in _PL_BINS}
         self._seed_vals = set()
-        self._crc_pass = 0
-        self._crc_fail = 0
-        self._lb_pkt_count = 0
+        self._syms_per_block = {}
+        self._bad_framing = 0
         self._block_count = 0
-        cocotb.start_soon(self._consume_lb())
 
         while True:
             tx: NrChainSeqItem = await self.tx_fifo.get()
-            rx: NrChainOutputItem = await self.rx_fifo.get()
+            _rx: NrChainOutputItem = await self.rx_fifo.get()  # sync only
+            lb: NrChainLoopbackItem = await self.lb_fifo.get()
 
             cp_label = _bin(tx.cp_len, _CP_BINS)
             pl_label = _bin(len(tx.payload), _PL_BINS)
             self._cp_bin_hits[cp_label] = self._cp_bin_hits.get(cp_label, 0) + 1
             self._pl_bin_hits[pl_label] = self._pl_bin_hits.get(pl_label, 0) + 1
             self._seed_vals.add(tx.scrambler_seed)
-            if rx.crc_ok:
-                self._crc_pass += 1
-            else:
-                self._crc_fail += 1
             self._block_count += 1
+
+            n_syms = lb.n_symbols(self.n_fft, tx.cp_len)
+            if n_syms is None:
+                self._bad_framing += 1
+            else:
+                self._syms_per_block[n_syms] = self._syms_per_block.get(n_syms, 0) + 1
 
     def report_phase(self) -> None:
         self.logger.info("=== NR Chain Coverage Report ===")
         self.logger.info(f"  Transport blocks    : {self._block_count}")
-        self.logger.info(f"  OFDM pkts at LB     : {self._lb_pkt_count}")
-        if self._block_count:
-            ratio = self._lb_pkt_count / self._block_count
-            self.logger.info(f"  OFDM syms per block : {ratio:.2f}")
-        self.logger.info(f"  CRC pass / fail     : {self._crc_pass} / {self._crc_fail}")
+        hist = dict(sorted(self._syms_per_block.items()))
+        self.logger.info(f"  OFDM syms per block : {hist}")
         self.logger.info(f"  Scrambler seeds     : {sorted(f'0x{s:06x}' for s in self._seed_vals)}")
         self.logger.info("  CP length distribution:")
         for label, count in self._cp_bin_hits.items():
@@ -111,12 +103,11 @@ class NrChainCoverageCollector(uvm_component):
         if self._cp_bin_hits.get("zero    [0]", 0) == 0:
             self.logger.warning("  Coverage gap: cp_len=0 (no-CP passthrough) never exercised")
         if len(self._seed_vals) < 2:
+            self.logger.warning("  Coverage gap: only one scrambler seed exercised")
+        if max(self._syms_per_block, default=0) < 2:
+            self.logger.warning("  Coverage gap: no multi-symbol transport block exercised")
+        if self._bad_framing:
             self.logger.warning(
-                "  Coverage gap: only one scrambler seed exercised - "
-                "add SeedSweepLoopbackTest to the regression"
-            )
-        if self._block_count and self._lb_pkt_count <= self._block_count:
-            self.logger.warning(
-                "  Coverage gap: no multi-symbol transport blocks exercised - "
-                "every block used exactly one OFDM symbol (payload_len == N_FFT)"
+                f"  {self._bad_framing} block(s) with a non-integral symbol count at the "
+                "loopback (the scoreboard flags these as failures)"
             )

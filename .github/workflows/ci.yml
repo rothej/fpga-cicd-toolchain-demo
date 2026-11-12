@@ -19,6 +19,9 @@ jobs:
   lint:
     uses: ./.github/workflows/lint.yml
 
+  ref-model-tests:
+    uses: ./.github/workflows/ref_model_tests.yml
+
   unit-sim:
     needs: lint
     uses: ./.github/workflows/unit_sim.yml

@@ -28,9 +28,9 @@
  *   (a) AXI-S requires the initiator to hold tvalid high until tready is
  *       asserted; there is never a guaranteed tvalid=0 gap between blocks.
  *
- *   (b) Each 64-byte / QPSK transport block spans four OFDM symbols (256
- *       mapper outputs / N_FFT=64).  An EMIT->FILL edge trigger would fire
- *       four times per block, reloading the LFSR mid-stream.
+ *   (b) A transport block spans payload_len / N_FFT OFDM symbols (one mapper
+ *       output per byte). An EMIT->FILL edge trigger would fire once per
+ *       symbol, reloading the LFSR mid-block when a block has several symbols.
  *
  * The state machine actively creates a one-cycle tready=0 window:
  *
@@ -43,11 +43,18 @@
  *             Returns to TX_CINIT on the last accepted input byte (tlast).
  *
  * Backpressure propagation:
- *   s_axis_tready = sym_ready && (tx_state == TX_IDLE).
- *   The scrambler's tvalid input is gated with s_axis_tready so the LFSR
- *   only advances on cycles where data is actually consumed by the pipeline.
- *   Without this gate, the LFSR advances during cp_inserter EMIT stalls,
- *   desynchronising the TX Gold sequence from the RX descrambler.
+ *   s_axis_tready = sym_ready && !sym_hold && (tx_state == TX_IDLE).
+ *   sym_ready alone is not enough: scrambler and qam_mapper add two register
+ *   stages that don't stall, so two more bytes are accepted after the symbol's
+ *   last byte before cp_inserter leaves FILL. sym_hold blocks input from the
+ *   last byte of each N_FFT-sample symbol (or tlast) until cp_inserter has
+ *   gone through EMIT and returned to FILL.
+ *
+ * Block length constraint:
+ *   payload_len must be a non-zero multiple of N_FFT. The chain neither pads nor
+ *   carries a length, and cp_inserter does not clear its buffer on an early
+ *   s_axis_tlast, so a shorter block would come out as a full symbol containing
+ *   stale samples.
  *
  * Note on CRC: CRC attachment is not performed in this wrapper; transport
  * block payload is scrambled, mapped, and CP-inserted directly. CRC
@@ -62,8 +69,7 @@ module nr_tx_chain #(
     parameter int CP_LEN_MAX = 16,
     parameter int SAMP_W     = 16,   // total I+Q width at output (2 × IQ_W)
     parameter int MOD_ORDER  = 2,    // bits per QAM symbol (compile-time)
-    parameter int DATA_W     = 8,
-    parameter int POLY_W     = 24    // accepted for interface compatibility; unused here
+    parameter int DATA_W     = 8
 ) (
     input logic clk,
     input logic rst_n,
@@ -125,14 +131,41 @@ module nr_tx_chain #(
         end
     end
 
-    // tx_cinit_load: combinational, fires exactly once per block.
+    // tx_cinit_load: combinational, fires once per block.
     // tready=0 this cycle (CINIT gating) -> byte 0 is NOT accepted yet.
     // On the next cycle tx_state=IDLE, tready=sym_ready, byte 0 is accepted
     // with the freshly loaded LFSR.
     assign tx_cinit_load = (tx_state == TX_CINIT) && s_axis_tvalid;
 
+
+    logic [$clog2(N_FFT)-1:0] beat_cnt;
+    logic sym_hold, saw_emit;
+    wire accept = s_axis_tvalid && s_axis_tready;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            beat_cnt <= '0;
+            sym_hold <= 1'b0;
+            saw_emit <= 1'b0;
+        end else begin
+            if (accept) begin
+                if (s_axis_tlast || beat_cnt == $bits(beat_cnt)'(N_FFT - 1)) begin
+                    beat_cnt <= '0;
+                    sym_hold <= 1'b1;  // symbol (or block) complete: hold off input
+                    saw_emit <= 1'b0;
+                end else begin
+                    beat_cnt <= beat_cnt + 1'b1;
+                end
+            end
+            if (sym_hold) begin
+                if (!sym_ready) saw_emit <= 1'b1;  // cp_inserter entered EMIT
+                else if (saw_emit) sym_hold <= 1'b0;  // and is back in FILL
+            end
+        end
+    end
+
     // s_axis_tready: propagate cp_inserter backpressure AND hold low in CINIT.
-    assign s_axis_tready = sym_ready && (tx_state == TX_IDLE);
+    assign s_axis_tready = sym_ready && !sym_hold && (tx_state == TX_IDLE);
 
     /*
      * Block-start tag

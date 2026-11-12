@@ -25,8 +25,7 @@ module nr_chain_top #(
     parameter int CP_LEN_MAX = 16,
     parameter int SAMP_W     = 16,
     parameter int MOD_ORDER  = 2,   // bits per QAM symbol: 2=QPSK 4=16QAM 6=64QAM
-    parameter int DATA_W     = 8,
-    parameter int POLY_W     = 24   // CRC polynomial width in bits (e.g. 24 = CRC-24A)
+    parameter int DATA_W     = 8
 ) (
     input logic clk,
     input logic rst_n,
@@ -52,8 +51,7 @@ module nr_chain_top #(
     input  logic              m_axis_tready,
     output logic [DATA_W-1:0] m_axis_tdata,
     output logic              m_axis_tlast,
-    output logic              lb_tuser,
-    output logic              crc_ok
+    output logic              lb_tuser
 );
 
     /*
@@ -86,8 +84,7 @@ module nr_chain_top #(
         .CP_LEN_MAX(CP_LEN_MAX),
         .SAMP_W    (SAMP_W),
         .MOD_ORDER (MOD_ORDER),
-        .DATA_W    (DATA_W),
-        .POLY_W    (POLY_W)
+        .DATA_W    (DATA_W)
     ) u_tx (
         .clk           (clk),
         .rst_n         (rst_n),
@@ -110,8 +107,7 @@ module nr_chain_top #(
         .CP_LEN_MAX(CP_LEN_MAX),
         .SAMP_W    (SAMP_W),
         .MOD_ORDER (MOD_ORDER),
-        .DATA_W    (DATA_W),
-        .POLY_W    (POLY_W)
+        .DATA_W    (DATA_W)
     ) u_rx (
         .clk           (clk),
         .rst_n         (rst_n),
@@ -125,8 +121,7 @@ module nr_chain_top #(
         .m_axis_tvalid (m_axis_tvalid),
         .m_axis_tready (m_axis_tready),
         .m_axis_tdata  (m_axis_tdata),
-        .m_axis_tlast  (m_axis_tlast),
-        .crc_ok        (crc_ok)
+        .m_axis_tlast  (m_axis_tlast)
     );
 
 endmodule : nr_chain_top

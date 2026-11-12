@@ -1,10 +1,11 @@
 # FPGA CI/CD Toolchain Demo
 
 [![Lint](https://github.com/rothej/fpga-cicd-toolchain-demo/actions/workflows/lint.yml/badge.svg)](https://github.com/rothej/fpga-cicd-toolchain-demo/actions/workflows/lint.yml)
+[![Ref Model Tests](https://github.com/rothej/fpga-cicd-toolchain-demo/actions/workflows/ref_model_tests.yml/badge.svg)](https://github.com/rothej/fpga-cicd-toolchain-demo/actions/workflows/ref_model_tests.yml)
 [![Unit Sim](https://github.com/rothej/fpga-cicd-toolchain-demo/actions/workflows/unit_sim.yml/badge.svg)](https://github.com/rothej/fpga-cicd-toolchain-demo/actions/workflows/unit_sim.yml)
 [![Integration Sim](https://github.com/rothej/fpga-cicd-toolchain-demo/actions/workflows/integration_sim.yml/badge.svg)](https://github.com/rothej/fpga-cicd-toolchain-demo/actions/workflows/integration_sim.yml)
 
-A complete SystemVerilog development environment demonstrating [Verible](https://github.com/chipsalliance/verible), [Verilator](https://www.veripool.org/verilator/), [cocotb](https://www.cocotb.org/), and [pyuvm](https://github.com/pyuvm/pyuvm) working together with a pre-commit linting and formatting pipeline.
+A complete SystemVerilog development environment demonstrating [Verible](https://github.com/chipsalliance/verible), [Verilator](https://www.veripool.org/verilator/), [cocotb](https://www.cocotb.org/), and [PyUVM](https://github.com/pyuvm/pyuvm) working together with a pre-commit linting and formatting pipeline.
 
 The DUT is a parameterizable 5G NR physical-layer chain implemented across multiple SystemVerilog modules under `rtl/`. This includes CRC generation/checking, scrambling, QAM mapping/demapping, and cyclic prefix insertion/removal.
 
