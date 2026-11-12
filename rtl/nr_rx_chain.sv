@@ -31,12 +31,18 @@
  *   module.  Sequences must generate payloads limited to MOD_ORDER bits so
  *   that the scoreboard comparison (rx.data == tx.payload) is well-defined.
  *
+ * Sideband timing:
+ *   cp_remover latches cp_len only while s_axis_tvalid is low, so cp_len must be
+ *   presented at least one cycle before the first beat of a block. cp_len and
+ *   scrambler_seed must match the TX values and stay stable until the block's
+ *   m_axis_tlast. Only scrambler_seed[30:0] is used (bit 31 is ignored).
+ *
  * Descrambler seeding:
  *   cinit_load fires on the cp_remover output beat carrying the TX block-start
  *   tag (sym_tuser). nr_tx_chain tags byte 0 of each transport block; the tag
  *   rides through scrambler -> qam_mapper -> cp_inserter -> cp_remover and is
- *   never asserted in the CP region. This replaced an idle-gap heuristic that
- *   misfired on intra-block symbol boundaries whenever N_FFT > CP_LEN_MAX.
+ *   never asserted in the CP region. Intra-block symbol boundaries carry no tag,
+ *   so the descrambler LFSR runs on across them.
  */
 
 `timescale 1ns / 1ps
@@ -112,20 +118,10 @@ module nr_rx_chain #(
     /*
      * Descrambler seed detection
      *
-     * sym_tuser rides from nr_tx_chain's block-start tag through
-     * cp_remover. It is never asserted during the CP-copy region (the
-     * tag always lands at cp_inserter buffer index 0 on the TX side - see
-     * cp_inserter.sv). rx_cinit_load fires the same cycle cp_remover emits
-     * the tagged sample - one cycle before qam_demapper's registered
-     * output (and therefore the descrambler input) presents it, matching
-     * the cinit-before-data convention used by nr_tx_chain's tx_cinit_load.
-     *
-     * Replaces a prior idle-gap heuristic (sym_gap_cnt > CP_LEN_MAX) that
-     * assumed every intra-block symbol boundary produced a gap no larger
-     * than CP_LEN_MAX cycles. cp_inserter's FILL phase actually stalls the
-     * whole upstream pipeline for ~N_FFT cycles between symbols, so for
-     * N_FFT > CP_LEN_MAX every intra-block boundary looked like a new
-     * transport block and reseeded the descrambler mid-block.
+     * sym_tuser is the block-start tag from nr_tx_chain, carried through cp_remover.
+     * rx_cinit_load fires the same cycle cp_remover emits the tagged sample - one
+     * cycle before qam_demapper's registered output (the descrambler input) presents
+     * it, matching the cinit-before-data convention of nr_tx_chain's tx_cinit_load.
      */
     logic rx_cinit_load;
     assign rx_cinit_load = sym_valid && sym_tuser;

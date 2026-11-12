@@ -9,13 +9,17 @@ class NrChainSeqItem(uvm_sequence_item):
     """
     Transport block for the nr_chain loopback testbench.
 
-    payload        - raw data bytes driven into nr_tx_chain before CRC
-                     attachment
-    cp_len         - cyclic prefix length in samples; presented on the cp_len
-                     sideband and must match between TX insert and RX remove
-    scrambler_seed - 32-bit LFSR seed; shared between TX scrambler and RX
-                     descrambler - mismatch shows as payload corruption
-    data_w         - DATA_W RTL parameter; determines tdata byte width mask
+    payload        - raw data bytes driven into nr_tx_chain. Length must be a non-zero
+                     multiple of N_FFT (enforced by NrChainDriver). Values must fit in
+                     MOD_ORDER bits: nr_rx_chain masks its output to MOD_ORDER bits, so
+                     wider values cannot round-trip.
+    cp_len         - cyclic prefix length in samples; presented on the cp_len sideband
+                     and shared by TX cp_inserter and RX cp_remover
+    scrambler_seed - scrambler cinit; only bits [30:0] reach the DUT (bit 31 is ignored).
+                     Shared by the TX scrambler and RX descrambler - a mismatch shows up
+                     as payload corruption
+    data_w         - DATA_W RTL parameter, recorded for reference. The driver masks with
+                     its own ConfigDB "data_w", not this field.
     """
 
     def __init__(self, name: str = "nr_chain_seq_item") -> None:

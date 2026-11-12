@@ -15,8 +15,9 @@ from verif.nr_chain.seq_item import NrChainSeqItem
 
 class MultiBlockLoopbackSeq(uvm_sequence):
     """
-    count transport blocks of payload_len random bytes, driven back-to-back.
+    Count transport blocks of payload_len random bytes, driven back-to-back.
 
+    payload_len must be a non-zero multiple of N_FFT (see NrChainDriver).
     Primary integration regression for inter-block contamination: payload
     bytes from block N must not appear in the recovered output of block N+1.
     """
@@ -31,7 +32,7 @@ class MultiBlockLoopbackSeq(uvm_sequence):
         self.count: int = 16
 
     async def body(self) -> None:
-        mask = (1 << self.mod_order) - 1  # was: (1 << self.data_w) - 1
+        mask = (1 << self.mod_order) - 1
         for _ in range(self.count):
             item = NrChainSeqItem()
             item.payload = [random.randint(0, mask) for _ in range(self.payload_len)]
@@ -46,9 +47,11 @@ class VaryingCpLoopbackSeq(uvm_sequence):
     """
     One transport block per cp_len in cp_lens, driven back-to-back.
 
-    Models the 5G NR slot structure end-to-end: symbol 0 has the extended CP,
-    symbols 1-13 have the normal CP. Both TX cp_inserter and RX cp_remover
-    receive the same cp_len sideband at each symbol boundary.
+    cp_len is a per-block sideband: the driver presents it before each block and holds
+    it until the block leaves the RX chain, so TX cp_inserter and RX cp_remover always
+    see the same value. Exercises runtime cp_len reconfiguration between blocks
+    (including the cp_len=0 passthrough). It does not model a per-symbol CP pattern
+    within a block.
     """
 
     def __init__(self, name: str = "VaryingCpLoopbackSeq") -> None:
@@ -60,7 +63,7 @@ class VaryingCpLoopbackSeq(uvm_sequence):
         self.cp_lens: list[int] = [0, 4, 8, 12, 16]
 
     async def body(self) -> None:
-        mask = (1 << self.mod_order) - 1  # was: (1 << self.data_w) - 1
+        mask = (1 << self.mod_order) - 1
         for cp_len in self.cp_lens:
             item = NrChainSeqItem()
             item.payload = [random.randint(0, mask) for _ in range(self.payload_len)]
@@ -88,7 +91,7 @@ class SeedSweepLoopbackSeq(uvm_sequence):
         self.scrambler_seeds: list[int] = [0x00_0001, 0x00_0003, 0xAB_CDEF, 0xFF_FFFF]
 
     async def body(self) -> None:
-        mask = (1 << self.mod_order) - 1  # was: (1 << self.data_w) - 1
+        mask = (1 << self.mod_order) - 1
         payload = [random.randint(0, mask) for _ in range(self.payload_len)]
         for seed in self.scrambler_seeds:
             item = NrChainSeqItem()
@@ -235,19 +238,21 @@ class StressVSeq(NrChainVirtualSeqBase):
 class MultiSymbolBlockLoopbackSeq(uvm_sequence):
     """
     One transport block spanning multiple OFDM symbols
-    (payload_len = n_symbols * n_fft).
+    (payload_len = n_symbols * n_fft). n_fft must match the RTL N_FFT.
 
-    Every other sequence in this file uses payload_len == n_fft (exactly
-    one symbol per block), which leaves two branches  dead:
+    The other sequences use payload_len == n_fft (one symbol per block), which
+    leaves two behaviours unexercised:
 
-      - nr_tx_chain.sv: s_axis_tready deasserted because sym_ready=0 while
-        tx_state==TX_IDLE. cp_inserter never has to finish EMITting symbol N
-        while more input bytes for the same block are still arriving.
-      - nr_rx_chain.sv: rx_cinit_load's short-gap ("hold, do not reload")
-        branch. Scoreboard checks sample count and tuser position.
+      - nr_tx_chain.sv: with more input bytes still arriving for the same block,
+        s_axis_tready must drop (sym_hold / sym_ready=0) while cp_inserter emits
+        symbol N, then resume for symbol N+1.
+      - nr_rx_chain.sv: the descrambler must reseed only on the block-start tuser
+        and keep its LFSR running across intra-block symbol boundaries. A spurious
+        reseed there corrupts every byte after the first symbol.
 
-    n_symbols=3 forces two FILL/EMIT cycles of backpressure on TX and two
-    short intra-block gaps on RX within a single transport block.
+    n_symbols=3 gives two intra-block boundaries for each. The scoreboard also
+    checks the loopback sample count and that tuser fires exactly once, at
+    sample index cp_len.
     """
 
     def __init__(self, name: str = "MultiSymbolBlockLoopbackSeq") -> None:
